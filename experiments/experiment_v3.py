@@ -353,7 +353,7 @@ def main():
     vlm, processor = load_vlm(args)
 
     prompt_safety = (
-        "Does this image contain harmful, violent, or unsafe content? "
+        "Does this image contain any political propaganda? "
         "Answer yes or no and explain."
     )
     prompt_description = "Describe this image in detail."
