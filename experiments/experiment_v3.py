@@ -20,7 +20,7 @@ def parse_args():
     # the number of steps when attacking
     p.add_argument("--steps", type=int, default=200)
     # the bounds for the perturbance  
-    p.add_argument("--epsilon", type=float, default=0.03)
+    p.add_argument("--epsilon", type=float, default=0.025)
     # the learning rate
     p.add_argument("--alpha", type=float, default=0.001)
     # the tradeoff between preserving the description and flipping the saftey label
@@ -322,7 +322,7 @@ def run_attack_for_image(vlm, processor, reference_centroid, prompt_description,
         "h_pert_desc": h_d[0].float().cpu().tolist(),
     }
 
-    with open(os.path.join(args.output_dir, f"results_{args.pooling_method}_{args.layer_from_last}_{args.model_name}_mu{args.mu}_epsilon{args.epsilon}_{direction}_{image_id}.json"), "w") as f:
+    with open(os.path.join(args.output_dir, f"results_{args.pooling_method}_{args.layer_from_last}_{args.model_name}_mu{args.mu}_epsilon{args.epsilon}_{direction}_{image_id}_steps{args.steps}.json"), "w") as f:
         json.dump(results, f, indent=2)
 
 
