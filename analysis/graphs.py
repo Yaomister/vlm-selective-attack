@@ -6,10 +6,14 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 
-
+def flipped(g):
+    clean = g["safety_clean"].str.lower().str.startswith("yes")
+    pert = g["safety_perturbed"].str.lower().str.startswith("yes")
+    return clean != pert
 
 METRICS = {
-    "attack_success": lambda g: (g["safety_perturbed"] != g["safety_clean"]).mean(),
+    "attack_success": lambda g: flipped(g).mean(),
+    "flip_count":     lambda g: flipped(g).sum(),
     "safety_shift":   lambda g: (g["final_safety_distance"] - g["initial_safety_distance"]).mean(),
     "desc_drift":     lambda g: g["final_description_drift"].mean(),
 }
@@ -25,7 +29,6 @@ def summarize(df, param_held_constant, param_varying, metric, direction):
     if sub.empty:
         print("no data available.")
         return
-    
 
     y = sub.groupby(param_varying).apply(METRICS[metric])
 
