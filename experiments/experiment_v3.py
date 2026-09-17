@@ -84,7 +84,6 @@ def prepare_inputs(processor, image, prompt):
     inputs = processor(text=text_prompt, images=image, return_tensors="pt")
     return {k: v.to(device) for k, v in inputs.items()}
 
-
 def get_hidden(vlm, inputs, pixel_values, args):
     """The forward pass, return pooled hidden states at specified layer."""
     inputs_copy = dict(inputs)
@@ -322,8 +321,12 @@ def run_attack_for_image(vlm, processor, reference_centroid, prompt_description,
         "h_pert_desc": h_d[0].float().cpu().tolist(),
     }
 
-    with open(os.path.join(args.output_dir, f"results_{args.pooling_method}_{args.layer_from_last}_{args.model_name}_mu{args.mu}_epsilon{args.epsilon}_{direction}_{image_id}_steps{args.steps}.json"), "w") as f:
+    # write it to a temp file in case it crashes half way
+    out = get_result_path(args, direction, image_id)
+    tmp = out + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(results, f, indent=2)
+    os.replace(tmp, out)
 
 
 def process_dataset(dataset_dir):
@@ -341,6 +344,12 @@ def process_dataset(dataset_dir):
             safe_reference_images.append(safe_image)
 
     return pairs, safe_reference_images
+
+def get_result_path(args, direction, image_id):
+    return os.path.join(
+        args.output_dir,
+        f"results_{args.pooling_method}_{args.layer_from_last}_{args.model_name}_mu{args.mu}_epsilon{args.epsilon}_{direction}_{image_id}_steps{args.steps}.json"
+        )
 
 
 def main():
@@ -376,16 +385,17 @@ def main():
 
 
     for pair_id, harmful_image, safe_image in pairs:
-        print(f"Running attack for image {pair_id}")
-        # safe to harmful
-        run_attack_for_image(vlm, processor, safe_centroid,
-                             prompt_description, prompt_safety,
-                             safe_image, f"{pair_id}_safe", -1.0, args)
-
-        # harmful to safe
-        run_attack_for_image(vlm, processor, safe_centroid,
-                             prompt_description, prompt_safety,
-                             harmful_image, f"{pair_id}_harmful", 1.0, args)
+        # safe to harmful and harmful to safe
+        jobs = [(safe_image, f"{pair_id}_safe", -1.0),
+                (harmful_image, f"{pair_id}_harmful", 1.0)]
+        for image, image_id, direction in jobs:
+            if os.path.exists(get_result_path(args, direction, image_id)):
+                print(f"Skipping {image_id} (done)")
+                continue
+            print(f"Running attack for image {pair_id}")
+            run_attack_for_image(vlm, processor, safe_centroid,
+                                prompt_description, prompt_safety,
+                                image, image_id, direction, args)
         
 if __name__ == "__main__":
     main()
