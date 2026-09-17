@@ -351,6 +351,10 @@ def get_result_path(args, direction, image_id):
         f"results_{args.pooling_method}_{args.layer_from_last}_{args.model_name}_mu{args.mu}_epsilon{args.epsilon}_{direction}_{image_id}_steps{args.steps}.json"
         )
 
+def find_existing_results(args, direction, image_id):
+    name = os.path.basename(get_result_path(args, direction, image_id))
+    hits = list(Path(args.output_dir).rglob(name))
+    return hits[0] if hits else 0
 
 def main():
     """Run everything."""
@@ -389,7 +393,7 @@ def main():
         jobs = [(safe_image, f"{pair_id}_safe", -1.0),
                 (harmful_image, f"{pair_id}_harmful", 1.0)]
         for image, image_id, direction in jobs:
-            if os.path.exists(get_result_path(args, direction, image_id)):
+            if find_existing_results(args, direction, image_id) is not None:
                 print(f"Skipping {image_id} (done)")
                 continue
             print(f"Running attack for image {pair_id}")
