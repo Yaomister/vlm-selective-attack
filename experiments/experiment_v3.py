@@ -344,7 +344,7 @@ def process_dataset(dataset_dir):
             continue
         harmful_dir = find_image(pair_dir, "harmful")
         safe_dir    = find_image(pair_dir, "safe")
-        if harmful_dir.exists() and safe_dir.exists():
+        if harmful_dir and safe_dir:
             safe_image = Image.open(safe_dir).convert("RGB")
             harmful_image = Image.open(harmful_dir).convert("RGB")
             pairs.append((pair_dir.name, harmful_image, safe_image))
@@ -361,7 +361,7 @@ def get_result_path(args, direction, image_id):
 def find_existing_results(args, direction, image_id):
     name = os.path.basename(get_result_path(args, direction, image_id))
     hits = list(Path(args.output_dir).rglob(name))
-    return hits[0] if hits else 0
+    return hits[0] if hits else None
 
 def main():
     """Run everything."""
