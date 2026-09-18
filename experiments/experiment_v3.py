@@ -329,14 +329,21 @@ def run_attack_for_image(vlm, processor, reference_centroid, prompt_description,
     os.replace(tmp, out)
 
 
+def find_image(path_dir, name):
+    for extension in (".jpg", ".jpeg", ".png"):
+        path = path_dir / f"{name}{extension}"
+        if path.exists():
+            return path
+    return None
+
 def process_dataset(dataset_dir):
     pairs = []
     safe_reference_images = []
     for pair_dir in sorted(dataset_dir.iterdir()):
         if not pair_dir.is_dir():
             continue
-        harmful_dir = pair_dir / "harmful.jpg"
-        safe_dir    = pair_dir / "safe.jpg"
+        harmful_dir = find_image(pair_dir, "harmful")
+        safe_dir    = find_image(pair_dir, "safe")
         if harmful_dir.exists() and safe_dir.exists():
             safe_image = Image.open(safe_dir).convert("RGB")
             harmful_image = Image.open(harmful_dir).convert("RGB")
