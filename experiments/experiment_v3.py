@@ -88,7 +88,7 @@ def get_hidden(vlm, inputs, pixel_values, args):
     """The forward pass, return pooled hidden states at specified layer."""
     inputs_copy = dict(inputs)
     inputs_copy["pixel_values"] = pixel_values
-    outputs = vlm(**inputs_copy, output_hidden_states=True)
+    outputs = vlm.model(**inputs_copy, output_hidden_states=True)
     # (1, sequence_length, hidden_dim)
     hidden_states = outputs.hidden_states
 
