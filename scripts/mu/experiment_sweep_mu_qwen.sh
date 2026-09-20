@@ -10,18 +10,18 @@
 
 mkdir -p logs
 
-source /home/yao.eric/selective-attack/.venv/bin/activate
+source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
 
-STEPS=(50 100 200 400 800)  
-STEP=${STEPS[$SLURM_ARRAY_TASK_ID]}
+MUS=(1 2 5 10 20)
+MU=${MUS[$SLURM_ARRAY_TASK_ID]}
 
 python experiments/experiment_v3.py \
-  --model_name LLaVA-1.5-7b \
+  --model_name Qwen-VL \
   --dataset_dir ./sorted \
-  --output_dir ./attack_results/STEP_$STEP \
-  --steps $STEP \
+  --output_dir ./attack_results/Qwen-VL/mu_$MU \
+  --steps 200 \
   --epsilon 0.025 \
   --alpha 0.001 \
-  --mu 10 \
+  --mu $MU \
   --layer_from_last -1 \
   --pooling_method last_token

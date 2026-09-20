@@ -1,27 +1,30 @@
 #!/bin/bash
-#SBATCH --job-name=epsilon
+#SBATCH --job-name=pooling_method
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:a100:1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=48G
 #SBATCH --time=08:00:00
 #SBATCH --output=logs/mu_%A_%a.out
-#SBATCH --array=0-6
+#SBATCH --array=0-2
 
 mkdir -p logs
 
 source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
 
-EPSILONS=(0.01 0.025 0.05 0.1 0.25 0.5 1)
-EPSILON=${EPSILONS[$SLURM_ARRAY_TASK_ID]}
+POOLS=(last_token mean image_only)  
+POOL=${POOLS[$SLURM_ARRAY_TASK_ID]}
 
 python experiments/experiment_v3.py \
-  --model_name LLaVA-NeXT \
+  --model_name Qwen-VL \
   --dataset_dir ./sorted \
-  --output_dir ./attack_results/LLaVA-NeXT/epsilon_$EPSILON \
+  --output_dir ./attack_results/Qwen-VL/pooling_method_$POOL \
   --steps 200 \
-  --epsilon $EPSILON \
+  --epsilon 0.025 \
   --alpha 0.001 \
   --mu 10 \
   --layer_from_last -1 \
-  --pooling_method last_token
+  --pooling_method $POOL
+
+
+  

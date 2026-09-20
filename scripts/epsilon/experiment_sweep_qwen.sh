@@ -1,16 +1,16 @@
 #!/bin/bash
-#SBATCH --job-name=mu
+#SBATCH --job-name=epsilon
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:a100:1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=48G
 #SBATCH --time=08:00:00
 #SBATCH --output=logs/mu_%A_%a.out
-#SBATCH --array=0-5
+#SBATCH --array=0-6
 
 mkdir -p logs
 
-source /home/yao.eric/selective-attack/.venv/bin/activate
+source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
 
 EPSILONS=(0.01 0.025 0.05 0.1 0.25 0.5 1)
 EPSILON=${EPSILONS[$SLURM_ARRAY_TASK_ID]}
