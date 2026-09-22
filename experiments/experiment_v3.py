@@ -160,6 +160,8 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
 
     loss_history = []
 
+    
+    vlm.train()
     for step in range(args.steps):
 
         # Safety pathway: push AWAY from the reference
@@ -204,6 +206,7 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
         del hidden_states_safety_perturbed, hidden_states_description_perturbed
         torch.cuda.empty_cache()
 
+    vlm.eval()
     perturbed_final = (clean_pixels_safety + delta).clamp(0, 1).detach()
     image_u8 = (perturbed_final[0].permute(1,2,0).float().cpu().numpy() * 255).round().astype("uint8")
 
