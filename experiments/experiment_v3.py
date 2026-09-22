@@ -208,8 +208,11 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
 
     vlm.eval()
     perturbed_final = (clean_pixels_safety + delta).clamp(0, 1).detach()
-    image_u8 = (perturbed_final[0].permute(1,2,0).float().cpu().numpy() * 255).round().astype("uint8")
-
+    img = perturbed_final[0]
+    if img.dim() == 4:          # LLaVA-NeXT: (num_patches, 3, H, W)
+        img = img[0]            # patch 0 = resized full image
+    image_u8 = (img.permute(1,2,0).float().cpu().numpy() * 255).round().astype("uint8")
+    
     return to_normalised(perturbed_final), delta.detach(), loss_history, image_u8
 
 
