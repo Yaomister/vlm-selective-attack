@@ -99,7 +99,10 @@ def get_hidden(vlm, inputs, pixel_values, args):
         return hidden_states[args.layer_from_last].mean(dim=1)  
 
     # image tokens only
-    masked = inputs["input_ids"][0] == vlm.config.image_token_index
+    image_token = getattr(vlm.config, "image_token_id", None)
+    if image_token is None:
+        image_token = vlm.config.image_token_index
+    masked = inputs["input_ids"][0] == image_token
     return hidden_states[args.layer_from_last][:, masked, :].mean(dim = 1)
 
 
@@ -143,14 +146,26 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
     """
 
     # dimensions for broadcasting
-    mean = torch.tensor(processor.image_processor.image_mean, device=device).view(1,3,1,1)
-    std = torch.tensor(processor.image_processor.image_std, device=device).view(1, 3, 1, 1)
+    mean = torch.tensor(processor.image_processor.image_mean, device=device)
+    std = torch.tensor(processor.image_processor.image_std, device=device)
 
     to_pixel = lambda nv: nv * std + mean
     to_normalised = lambda pv: (pv - mean)/std
 
     inputs_safety = prepare_inputs(processor, image, prompt_safety)
     inputs_description = prepare_inputs(processor, image, prompt_description)
+
+    pv = inputs_safety['pixel_values']
+
+    # handle the case for Qwen
+    if pv.dim() == 2:
+        per_channel = pv.shape[1]//3
+        mean = mean.repeat_interleave(per_channel).view(1, -1)
+        std = std.repeat_interleave(per_channel).view(1, -1)
+    else:
+         mean, std = mean.view(1, 3, 1, 1), std.view(1, 3, 1, 1)
+
+
 
     clean_pixels_safety = to_pixel(inputs_safety["pixel_values"].detach().clone())
     clean_pixels_description = to_pixel(inputs_description["pixel_values"].detach().clone())
@@ -161,7 +176,6 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
     loss_history = []
 
     
-    vlm.train()
     for step in range(args.steps):
 
         # Safety pathway: push AWAY from the reference
@@ -189,6 +203,11 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
             delta.data = (
                 (clean_pixels_safety + delta.data).clamp(0, 1) - clean_pixels_safety
             )
+            # Keep temporal copies identical for Qwen
+            if delta.dim() == 2: 
+                Tp = processor.image_processor.temporal_patch_size
+                d = delta.data.view(delta.shape[0], 3, Tp, -1)
+                d.copy_(d.mean(dim=2, keepdim=True).expand_as(d))
             delta.grad = None
 
         # keep track of the loss
@@ -207,12 +226,20 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
         torch.cuda.empty_cache()
 
     vlm.eval()
+    # Qwen gives patches, needs to convert
     perturbed_final = (clean_pixels_safety + delta).clamp(0, 1).detach()
-    img = perturbed_final[0]
-    if img.dim() == 4:          # LLaVA-NeXT: (num_patches, 3, H, W)
-        img = img[0]            # patch 0 = resized full image
+    if perturbed_final.dim() == 2:  # Qwen: unpatchify
+        ip = processor.image_processor
+        t, h, w = inputs_safety["image_grid_thw"][0].tolist()
+        m, P, T = ip.merge_size, ip.patch_size, ip.temporal_patch_size
+        x = perturbed_final.view(t, h//m, w//m, m, m, 3, T, P, P)
+        img = x.permute(0, 6, 5, 1, 3, 7, 2, 4, 8).reshape(t*T, 3, h*P, w*P)[0]
+    else:
+        img = perturbed_final[0]
+        if img.dim() == 4:
+            img = img[0]
     image_u8 = (img.permute(1,2,0).float().cpu().numpy() * 255).round().astype("uint8")
-    
+
     return to_normalised(perturbed_final), delta.detach(), loss_history, image_u8
 
 
