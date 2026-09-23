@@ -54,13 +54,15 @@ def load_vlm(args):
 
     print(f"Loading {args.model_name} ...")
 
-    processor = transformers.AutoProcessor.from_pretrained(model_id)
+    
+
+    processor = transformers.AutoProcessor.from_pretrained(model_id,  max_pixels=1024*28*28)
 
     model = transformers.AutoModelForImageTextToText.from_pretrained(
         model_id, torch_dtype=torch.float16,
-        device_map=device, low_cpu_mem_usage=True,
-        max_pixels=1024*28*28
+        device_map=device, low_cpu_mem_usage=True
     )
+
     model.eval()
     for param in model.parameters():
         param.requires_grad_(False)
