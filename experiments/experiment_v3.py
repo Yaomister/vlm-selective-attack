@@ -59,6 +59,7 @@ def load_vlm(args):
     model = transformers.AutoModelForImageTextToText.from_pretrained(
         model_id, torch_dtype=torch.float16,
         device_map=device, low_cpu_mem_usage=True,
+        max_pixels=1024*28*28
     )
     model.eval()
     for param in model.parameters():
