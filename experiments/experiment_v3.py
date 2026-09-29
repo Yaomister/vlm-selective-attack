@@ -3,6 +3,8 @@ Hidden-State Dual-Objective PGD Attack on VLM Safety
 """
 
 import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import json
 import time
 import torch
@@ -13,6 +15,7 @@ from pathlib import Path
 import torch.nn.functional as F
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 def parse_args():
     """Get the arguments for the experiment."""
@@ -67,6 +70,7 @@ def load_vlm(args):
     for param in model.parameters():
         param.requires_grad_(False)
 
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     print(f"  Loaded in {time.time()-t0:.1f}s")
 
     return model, processor
@@ -178,7 +182,7 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
 
     loss_history = []
 
-    
+    vlm.train()
     for step in range(args.steps):
 
         # Safety pathway: push AWAY from the reference
