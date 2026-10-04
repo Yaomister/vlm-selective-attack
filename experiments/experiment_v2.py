@@ -32,6 +32,7 @@ import torch.nn.functional as F
 from PIL import Image
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -41,13 +42,25 @@ def parse_args():
     p.add_argument("--pgd_steps", type=int, default=200)
     p.add_argument("--epsilon", type=float, default=0.03)
     p.add_argument("--alpha", type=float, default=0.001)
-    p.add_argument("--mu", type=float, default=10.0,
-                   help="Weight on description preservation constraint")
-    p.add_argument("--layer", type=int, default=-1,
-                   help="Which hidden layer to use (-1 = last, -2 = second to last)")
-    p.add_argument("--pool", type=str, default="last_token",
-                   choices=["mean", "last_token"],
-                   help="Pooling strategy for hidden states")
+    p.add_argument(
+        "--mu",
+        type=float,
+        default=10.0,
+        help="Weight on description preservation constraint",
+    )
+    p.add_argument(
+        "--layer",
+        type=int,
+        default=-1,
+        help="Which hidden layer to use (-1 = last, -2 = second to last)",
+    )
+    p.add_argument(
+        "--pool",
+        type=str,
+        default="last_token",
+        choices=["mean", "last_token"],
+        help="Pooling strategy for hidden states",
+    )
     p.add_argument("--device", type=str, default="cuda")
     p.add_argument("--output_dir", type=str, default="attack_results")
     p.add_argument("--input_dir", type=str, default="./sorted")
@@ -58,16 +71,16 @@ def parse_args():
 # Image loading
 # ---------------------------------------------------------------------------
 COCO_IDS = [
-    "000000039769",   # cats on a couch
-    "000000174482",   # person cutting cake
-    "000000308394",   # person surfing
-    "000000079144",   # kitchen scene
-    "000000099054",   # people playing frisbee
-    "000000227765",   # person with skateboard
-    "000000453860",   # bus on a street
-    "000000151480",   # person with a knife (cooking)
-    "000000360137",   # people at a dining table
-    "000000386134",   # person with a bat (baseball)
+    "000000039769",  # cats on a couch
+    "000000174482",  # person cutting cake
+    "000000308394",  # person surfing
+    "000000079144",  # kitchen scene
+    "000000099054",  # people playing frisbee
+    "000000227765",  # person with skateboard
+    "000000453860",  # bus on a street
+    "000000151480",  # person with a knife (cooking)
+    "000000360137",  # people at a dining table
+    "000000386134",  # person with a bat (baseball)
 ]
 
 
@@ -81,16 +94,15 @@ def load_image(idx=0):
     return Image.open(path).convert("RGB"), cid
 
 
-
 def load_vlm(args):
     """Load the VLM model."""
     model_ids = {
-        "LLaVA-1.5-7b": "llava-hf/llava-1.5-7b-hf", 
+        "LLaVA-1.5-7b": "llava-hf/llava-1.5-7b-hf",
         "LLaVA-NeXT": "llava-hf/llama3-llava-next-8b-hf",
         "InternVL": "OpenGVLab/InternVL3-8B-hf",
-        "Qwen-VL": "Qwen/Qwen2.5-VL-7B-Instruct"
-        }
-    
+        "Qwen-VL": "Qwen/Qwen2.5-VL-7B-Instruct",
+    }
+
     assert args.model_name in model_ids, "unknown vlm model."
 
     model_id = model_ids[args.model_name]
@@ -101,8 +113,10 @@ def load_vlm(args):
     processor = transformers.AutoProcessor.from_pretrained(model_id)
 
     model = transformers.AutoModelForImageTextToText.from_pretrained(
-        model_id, torch_dtype=torch.float16,
-        device_map=device, low_cpu_mem_usage=True,
+        model_id,
+        torch_dtype=torch.float16,
+        device_map=device,
+        low_cpu_mem_usage=True,
     )
     model.eval()
     for param in model.parameters():
@@ -113,13 +127,15 @@ def load_vlm(args):
     return model, processor
 
 
-
 def prepare_inputs(processor, image, prompt, device):
     conversation = [
-        {"role": "user", "content": [
-            {"type": "image"},
-            {"type": "text", "text": prompt},
-        ]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": prompt},
+            ],
+        },
     ]
     text_prompt = processor.apply_chat_template(
         conversation, add_generation_prompt=True
@@ -131,9 +147,9 @@ def prepare_inputs(processor, image, prompt, device):
 def pool_hidden(hidden_states, method="last_token"):
     """Pool hidden states to a single vector."""
     if method == "last_token":
-        return hidden_states[:, -1, :]       # (batch, hidden_dim)
+        return hidden_states[:, -1, :]  # (batch, hidden_dim)
     elif method == "mean":
-        return hidden_states.mean(dim=1)     # (batch, hidden_dim)
+        return hidden_states.mean(dim=1)  # (batch, hidden_dim)
 
 
 def get_hidden(vlm, inputs, pixel_values, layer_idx, pool_method):
@@ -141,12 +157,11 @@ def get_hidden(vlm, inputs, pixel_values, layer_idx, pool_method):
     inputs_copy = dict(inputs)
     inputs_copy["pixel_values"] = pixel_values
     outputs = vlm(**inputs_copy, output_hidden_states=True)
-    h = outputs.hidden_states[layer_idx]     # (1, seq_len, hidden_dim)
+    h = outputs.hidden_states[layer_idx]  # (1, seq_len, hidden_dim)
     return pool_hidden(h, pool_method)
 
 
-def compute_references(vlm, processor, images, prompt_safety, prompt_desc,
-                       args):
+def compute_references(vlm, processor, images, prompt_safety, prompt_desc, args):
     """
     Compute reference hidden states for safe images.
     Returns centroid of safe images under safety prompt,
@@ -159,13 +174,15 @@ def compute_references(vlm, processor, images, prompt_safety, prompt_desc,
     for i, img in enumerate(images):
         with torch.no_grad():
             inputs_s = prepare_inputs(processor, img, prompt_safety, device)
-            h_s = get_hidden(vlm, inputs_s, inputs_s["pixel_values"],
-                             args.layer, args.pool)
+            h_s = get_hidden(
+                vlm, inputs_s, inputs_s["pixel_values"], args.layer, args.pool
+            )
             safe_refs.append(h_s)
 
             inputs_d = prepare_inputs(processor, img, prompt_desc, device)
-            h_d = get_hidden(vlm, inputs_d, inputs_d["pixel_values"],
-                             args.layer, args.pool)
+            h_d = get_hidden(
+                vlm, inputs_d, inputs_d["pixel_values"], args.layer, args.pool
+            )
             desc_refs.append(h_d)
 
         print(f"  Ref image {i+1}/{len(images)}")
@@ -175,8 +192,17 @@ def compute_references(vlm, processor, images, prompt_safety, prompt_desc,
     return h_safe, desc_refs
 
 
-def attack(vlm, processor, image, h_safe, h_desc_clean, prompt_safety,
-           prompt_desc, direction, args):
+def attack(
+    vlm,
+    processor,
+    image,
+    h_safe,
+    h_desc_clean,
+    prompt_safety,
+    prompt_desc,
+    direction,
+    args,
+):
     """
     Dual-objective PGD in VLM hidden state space.
 
@@ -189,11 +215,15 @@ def attack(vlm, processor, image, h_safe, h_desc_clean, prompt_safety,
     """
     device = args.device
 
-    mean = torch.tensor(processor.image_processor.image_mean, device=device).view(1,3,1,1)
-    std = torch.tensor(processor.image_processor.image_std, device=device).view(1, 3, 1, 1)
+    mean = torch.tensor(processor.image_processor.image_mean, device=device).view(
+        1, 3, 1, 1
+    )
+    std = torch.tensor(processor.image_processor.image_std, device=device).view(
+        1, 3, 1, 1
+    )
 
     to_pixel = lambda nv: nv * std + mean
-    to_normalised = lambda pv: (pv - mean)/std
+    to_normalised = lambda pv: (pv - mean) / std
 
     inputs_safety = prepare_inputs(processor, image, prompt_safety, device)
     inputs_desc = prepare_inputs(processor, image, prompt_desc, device)
@@ -208,14 +238,16 @@ def attack(vlm, processor, image, h_safe, h_desc_clean, prompt_safety,
     for step in range(args.pgd_steps):
         # Safety pathway: push AWAY from safe
         perturbed_s = (clean_pix_s + delta).clamp(0, 1)
-        h_s = get_hidden(vlm, inputs_safety, to_normalised(perturbed_s),
-                         args.layer, args.pool)
+        h_s = get_hidden(
+            vlm, inputs_safety, to_normalised(perturbed_s), args.layer, args.pool
+        )
         loss_safety = F.mse_loss(h_s, h_safe.detach())
 
         # Description pathway: stay CLOSE to clean
         perturbed_d = (clean_pix_d + delta).clamp(0, 1)
-        h_d = get_hidden(vlm, inputs_desc, to_normalised(perturbed_d),
-                         args.layer, args.pool)
+        h_d = get_hidden(
+            vlm, inputs_desc, to_normalised(perturbed_d), args.layer, args.pool
+        )
         loss_desc = F.mse_loss(h_d, h_desc_clean.detach())
 
         # We want to MAXIMIZE loss_safety and MINIMIZE loss_desc
@@ -227,22 +259,24 @@ def attack(vlm, processor, image, h_safe, h_desc_clean, prompt_safety,
             grad = delta.grad.detach()
             delta.data -= args.alpha * grad.sign()
             delta.data.clamp_(-args.epsilon, args.epsilon)
-            delta.data = (
-                (clean_pix_s + delta.data).clamp(0, 1) - clean_pix_s
-            )
+            delta.data = (clean_pix_s + delta.data).clamp(0, 1) - clean_pix_s
             delta.grad = None
 
-        loss_history.append({
-            "step": step,
-            "loss_safety": loss_safety.item(),
-            "loss_desc": loss_desc.item(),
-            "loss_total": loss.item(),
-        })
+        loss_history.append(
+            {
+                "step": step,
+                "loss_safety": loss_safety.item(),
+                "loss_desc": loss_desc.item(),
+                "loss_total": loss.item(),
+            }
+        )
 
         if step % 20 == 0:
-            print(f"  Step {step:4d}: safety_dist={loss_safety.item():.4f}  "
-                  f"desc_drift={loss_desc.item():.4f}  "
-                  f"total={loss.item():.4f}")
+            print(
+                f"  Step {step:4d}: safety_dist={loss_safety.item():.4f}  "
+                f"desc_drift={loss_desc.item():.4f}  "
+                f"total={loss.item():.4f}"
+            )
 
         del h_s, h_d
         torch.cuda.empty_cache()
@@ -254,92 +288,102 @@ def attack(vlm, processor, image, h_safe, h_desc_clean, prompt_safety,
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
-def generate(vlm, processor, pixel_values, prompt, image, device,
-             max_tokens=150):
+def generate(vlm, processor, pixel_values, prompt, image, device, max_tokens=150):
     inputs = prepare_inputs(processor, image, prompt, device)
     inputs["pixel_values"] = pixel_values
     with torch.no_grad():
-        ids = vlm.generate(**inputs, max_new_tokens=max_tokens,
-                           do_sample=False)
+        ids = vlm.generate(**inputs, max_new_tokens=max_tokens, do_sample=False)
     input_len = inputs["input_ids"].shape[1]
     return processor.tokenizer.decode(
         ids[0][input_len:], skip_special_tokens=True
     ).strip()
 
+
 # ---------------------------------------------------------------------------
 # Attack Loop for a single image
 # ---------------------------------------------------------------------------
-def run_attack_for_image(device, vlm, processor, h_safe, prompt_desc, prompt_safety, target_image, pair_id, direction, args):
+def run_attack_for_image(
+    device,
+    vlm,
+    processor,
+    h_safe,
+    prompt_desc,
+    prompt_safety,
+    target_image,
+    pair_id,
+    direction,
+    args,
+):
     # Get clean description reference for this image
-        with torch.no_grad():
-            inputs_d = prepare_inputs(processor, target_image, prompt_desc, device)
-            h_desc_clean = get_hidden(
-                vlm, inputs_d, inputs_d["pixel_values"], args.layer, args.pool
-            )
-
-        # Get clean responses before attack
-        print("\n=== Clean responses ===")
-        inputs_clean = prepare_inputs(
-            processor, target_image, prompt_safety, device
-        )
-        clean_pix = inputs_clean["pixel_values"].detach()
-
-        safety_clean = generate(
-            vlm, processor, clean_pix, prompt_safety, target_image, device
-        )
-        desc_clean = generate(
-            vlm, processor, clean_pix, prompt_desc, target_image, device
-        )
-        print(f"  Safety (clean): {safety_clean}")
-        print(f"  Desc (clean):   {desc_clean[:200]}")
-
-        # Run attack
-        print(f"\n=== Running PGD ({args.pgd_steps} steps, eps={args.epsilon}) ===")
-        perturbed, delta, loss_history = attack(
-            vlm, processor, target_image, h_safe, h_desc_clean,
-            prompt_safety, prompt_desc, direction, args
+    with torch.no_grad():
+        inputs_d = prepare_inputs(processor, target_image, prompt_desc, device)
+        h_desc_clean = get_hidden(
+            vlm, inputs_d, inputs_d["pixel_values"], args.layer, args.pool
         )
 
-        # Get perturbed responses
-        print("\n=== Perturbed responses ===")
-        safety_pert = generate(
-            vlm, processor, perturbed, prompt_safety, target_image, device
-        )
-        desc_pert = generate(
-            vlm, processor, perturbed, prompt_desc, target_image, device
-        )
-        print(f"  Safety (pert):  {safety_pert}")
-        print(f"  Desc (pert):    {desc_pert[:200]}")
+    # Get clean responses before attack
+    print("\n=== Clean responses ===")
+    inputs_clean = prepare_inputs(processor, target_image, prompt_safety, device)
+    clean_pix = inputs_clean["pixel_values"].detach()
 
-        # Delta stats
-        delta_linf = delta.abs().max().item()
-        delta_l2 = delta.norm(2).item()
-        print(f"\n  delta L_inf: {delta_linf:.6f}")
-        print(f"  delta L_2:   {delta_l2:.4f}")
+    safety_clean = generate(
+        vlm, processor, clean_pix, prompt_safety, target_image, device
+    )
+    desc_clean = generate(vlm, processor, clean_pix, prompt_desc, target_image, device)
+    print(f"  Safety (clean): {safety_clean}")
+    print(f"  Desc (clean):   {desc_clean[:200]}")
 
+    # Run attack
+    print(f"\n=== Running PGD ({args.pgd_steps} steps, eps={args.epsilon}) ===")
+    perturbed, delta, loss_history = attack(
+        vlm,
+        processor,
+        target_image,
+        h_safe,
+        h_desc_clean,
+        prompt_safety,
+        prompt_desc,
+        direction,
+        args,
+    )
 
-        # Save results
-        results = {
-            "target_image": pair_id,
-            "direction": direction,
-            "layer": args.layer,
-            "pool": args.pool,
-            "pgd_steps": args.pgd_steps,
-            "epsilon": args.epsilon,
-            "alpha": args.alpha,
-            "mu": args.mu,
-            "safety_clean": safety_clean,
-            "safety_perturbed": safety_pert,
-            "desc_clean": desc_clean,
-            "desc_perturbed": desc_pert,
-            "delta_linf": delta_linf,
-            "delta_l2": delta_l2,
-            "final_safety_dist": loss_history[-1]["loss_safety"],
-            "final_desc_drift": loss_history[-1]["loss_desc"],
-        }
+    # Get perturbed responses
+    print("\n=== Perturbed responses ===")
+    safety_pert = generate(
+        vlm, processor, perturbed, prompt_safety, target_image, device
+    )
+    desc_pert = generate(vlm, processor, perturbed, prompt_desc, target_image, device)
+    print(f"  Safety (pert):  {safety_pert}")
+    print(f"  Desc (pert):    {desc_pert[:200]}")
 
-        with open(os.path.join(args.output_dir, "results.json"), "a") as f:
-            json.dump(results, f, indent=2)
+    # Delta stats
+    delta_linf = delta.abs().max().item()
+    delta_l2 = delta.norm(2).item()
+    print(f"\n  delta L_inf: {delta_linf:.6f}")
+    print(f"  delta L_2:   {delta_l2:.4f}")
+
+    # Save results
+    results = {
+        "target_image": pair_id,
+        "direction": direction,
+        "layer": args.layer,
+        "pool": args.pool,
+        "pgd_steps": args.pgd_steps,
+        "epsilon": args.epsilon,
+        "alpha": args.alpha,
+        "mu": args.mu,
+        "safety_clean": safety_clean,
+        "safety_perturbed": safety_pert,
+        "desc_clean": desc_clean,
+        "desc_perturbed": desc_pert,
+        "delta_linf": delta_linf,
+        "delta_l2": delta_l2,
+        "final_safety_dist": loss_history[-1]["loss_safety"],
+        "final_desc_drift": loss_history[-1]["loss_desc"],
+    }
+
+    with open(os.path.join(args.output_dir, "results.json"), "a") as f:
+        json.dump(results, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -371,10 +415,9 @@ def main():
         vlm, processor, ref_images, prompt_safety, prompt_desc, args
     )
 
-
     for pair_id in os.listdir(args.input_dir):
         ## Ignore "." folders
-        if pair_id.startswith('.'):
+        if pair_id.startswith("."):
             continue
         # Pick target image to attack (person with a knife cooking, index 7)
         # This is an interesting case: a benign image that has ambiguous
@@ -385,11 +428,32 @@ def main():
         print(f"  Target ID {pair_id} loaded")
 
         print(f"\n=== Running attack for {pair_id}/safe.png")
-        run_attack_for_image(device, vlm, processor, h_safe, prompt_desc, prompt_safety, target_image_s, pair_id, -1, args)
+        run_attack_for_image(
+            device,
+            vlm,
+            processor,
+            h_safe,
+            prompt_desc,
+            prompt_safety,
+            target_image_s,
+            pair_id,
+            -1,
+            args,
+        )
 
         print(f"\n=== Running attack for {pair_id}/harmful.png")
-        run_attack_for_image(device, vlm, processor, h_safe, prompt_desc, prompt_safety, target_image_h, pair_id, 1, args)
-        
+        run_attack_for_image(
+            device,
+            vlm,
+            processor,
+            h_safe,
+            prompt_desc,
+            prompt_safety,
+            target_image_h,
+            pair_id,
+            1,
+            args,
+        )
 
 
 if __name__ == "__main__":

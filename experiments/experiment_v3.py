@@ -3,6 +3,7 @@ Hidden-State Dual-Objective PGD Attack on VLM Safety
 """
 
 import os
+
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import json
@@ -22,16 +23,32 @@ def parse_args():
     p = argparse.ArgumentParser()
     # the number of steps when attacking
     p.add_argument("--steps", type=int, default=200)
-    # the bounds for the perturbance  
+    # the bounds for the perturbance
     p.add_argument("--epsilon", type=float, default=0.025)
     # the learning rate
     p.add_argument("--alpha", type=float, default=0.001)
     # the tradeoff between preserving the description and flipping the saftey label
-    p.add_argument("--mu", type=float, default=10.0, help="Weight on description preservation constraint")
+    p.add_argument(
+        "--mu",
+        type=float,
+        default=10.0,
+        help="Weight on description preservation constraint",
+    )
     # The layer we're pooling from
-    p.add_argument("--layer_from_last", type=int, default=-1, help="Which hidden layer to use (-1 = last, -2 = second to last)")
+    p.add_argument(
+        "--layer_from_last",
+        type=int,
+        default=-1,
+        help="Which hidden layer to use (-1 = last, -2 = second to last)",
+    )
     # the pooling method
-    p.add_argument("--pooling_method", type=str, default="mean", choices=["mean", "last_token", "image_only"], help="Pooling strategy for hidden states")
+    p.add_argument(
+        "--pooling_method",
+        type=str,
+        default="mean",
+        choices=["mean", "last_token", "image_only"],
+        help="Pooling strategy for hidden states",
+    )
     p.add_argument("--output_dir", type=str, default="attack_results")
     p.add_argument("--dataset_dir", type=str, default="./sorted")
     # the name of the vlm we're running the attacks on
@@ -44,12 +61,12 @@ def parse_args():
 def load_vlm(args):
     """Load the VLM model."""
     model_ids = {
-        "LLaVA-1.5-7b": "llava-hf/llava-1.5-7b-hf", 
+        "LLaVA-1.5-7b": "llava-hf/llava-1.5-7b-hf",
         "LLaVA-NeXT": "llava-hf/llama3-llava-next-8b-hf",
         "InternVL": "OpenGVLab/InternVL3-8B-hf",
-        "Qwen-VL": "Qwen/Qwen2.5-VL-7B-Instruct"
-        }
-    
+        "Qwen-VL": "Qwen/Qwen2.5-VL-7B-Instruct",
+    }
+
     assert args.model_name in model_ids, "unknown vlm model."
 
     model_id = model_ids[args.model_name]
@@ -57,31 +74,36 @@ def load_vlm(args):
 
     print(f"Loading {args.model_name} ...")
 
-    
-
-    processor = transformers.AutoProcessor.from_pretrained(model_id,  max_pixels=1024*28*28)
+    processor = transformers.AutoProcessor.from_pretrained(
+        model_id, max_pixels=1024 * 28 * 28
+    )
 
     model = transformers.AutoModelForImageTextToText.from_pretrained(
-        model_id, torch_dtype=torch.float16,
-        device_map=device, low_cpu_mem_usage=True
+        model_id, torch_dtype=torch.float16, device_map=device, low_cpu_mem_usage=True
     )
 
     model.eval()
     for param in model.parameters():
         param.requires_grad_(False)
 
-    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    model.gradient_checkpointing_enable(
+        gradient_checkpointing_kwargs={"use_reentrant": False}
+    )
     print(f"  Loaded in {time.time()-t0:.1f}s")
 
     return model, processor
 
+
 def prepare_inputs(processor, image, prompt):
     """Prepare image and prompt as inputs for the VLMs."""
     conversation = [
-        {"role": "user", "content": [
-            {"type": "image"},
-            {"type": "text", "text": prompt},
-        ]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": prompt},
+            ],
+        },
     ]
     # apply the conversation format for the prompt
     text_prompt = processor.apply_chat_template(
@@ -90,6 +112,7 @@ def prepare_inputs(processor, image, prompt):
     # add the image
     inputs = processor(text=text_prompt, images=image, return_tensors="pt")
     return {k: v.to(device) for k, v in inputs.items()}
+
 
 def get_hidden(vlm, inputs, pixel_values, args):
     """The forward pass, return pooled hidden states at specified layer."""
@@ -100,17 +123,17 @@ def get_hidden(vlm, inputs, pixel_values, args):
     hidden_states = outputs.hidden_states
 
     if args.pooling_method == "last_token":
-        return hidden_states[args.layer_from_last][:, -1, :]  
+        return hidden_states[args.layer_from_last][:, -1, :]
     elif args.pooling_method == "mean":
         # (batch_size, hidden_dim)
-        return hidden_states[args.layer_from_last].mean(dim=1)  
+        return hidden_states[args.layer_from_last].mean(dim=1)
 
     # image tokens only
     image_token = getattr(vlm.config, "image_token_id", None)
     if image_token is None:
         image_token = vlm.config.image_token_index
     masked = inputs["input_ids"][0] == image_token
-    return hidden_states[args.layer_from_last][:, masked, :].mean(dim = 1)
+    return hidden_states[args.layer_from_last][:, masked, :].mean(dim=1)
 
 
 def compute_references(vlm, processor, images, prompt_safety, prompt_description, args):
@@ -124,12 +147,16 @@ def compute_references(vlm, processor, images, prompt_safety, prompt_description
         with torch.no_grad():
             # calculate the hidden states for the safety inputs
             safe_inputs = prepare_inputs(processor, img, prompt_safety)
-            hidden_states_safe = get_hidden(vlm, safe_inputs, safe_inputs["pixel_values"], args)
+            hidden_states_safe = get_hidden(
+                vlm, safe_inputs, safe_inputs["pixel_values"], args
+            )
             safety_references.append(hidden_states_safe)
 
             # calculate the hidden states for the description inputs
             description_inputs = prepare_inputs(processor, img, prompt_description)
-            hidden_states_description = get_hidden(vlm, description_inputs, description_inputs["pixel_values"], args)
+            hidden_states_description = get_hidden(
+                vlm, description_inputs, description_inputs["pixel_values"], args
+            )
             description_references.append(hidden_states_description)
 
         print(f"Reference image {i+1}/{len(images)}")
@@ -139,8 +166,17 @@ def compute_references(vlm, processor, images, prompt_safety, prompt_description
     return safety_centroid, description_references
 
 
-
-def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean, prompt_safety, prompt_description, direction, args):
+def attack(
+    vlm,
+    processor,
+    image,
+    safe_centroid,
+    hidden_states_description_clean,
+    prompt_safety,
+    prompt_description,
+    direction,
+    args,
+):
     """
     Dual-objective PGD in VLM hidden state space.
 
@@ -157,25 +193,25 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
     std = torch.tensor(processor.image_processor.image_std, device=device)
 
     to_pixel = lambda nv: nv * std + mean
-    to_normalised = lambda pv: (pv - mean)/std
+    to_normalised = lambda pv: (pv - mean) / std
 
     inputs_safety = prepare_inputs(processor, image, prompt_safety)
     inputs_description = prepare_inputs(processor, image, prompt_description)
 
-    pv = inputs_safety['pixel_values']
+    pv = inputs_safety["pixel_values"]
 
     # handle the case for Qwen
     if pv.dim() == 2:
-        per_channel = pv.shape[1]//3
+        per_channel = pv.shape[1] // 3
         mean = mean.repeat_interleave(per_channel).view(1, -1)
         std = std.repeat_interleave(per_channel).view(1, -1)
     else:
-         mean, std = mean.view(1, 3, 1, 1), std.view(1, 3, 1, 1)
-
-
+        mean, std = mean.view(1, 3, 1, 1), std.view(1, 3, 1, 1)
 
     clean_pixels_safety = to_pixel(inputs_safety["pixel_values"].detach().clone())
-    clean_pixels_description = to_pixel(inputs_description["pixel_values"].detach().clone())
+    clean_pixels_description = to_pixel(
+        inputs_description["pixel_values"].detach().clone()
+    )
 
     # the noise we're adding
     delta = torch.zeros_like(clean_pixels_safety, requires_grad=True)
@@ -188,14 +224,21 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
         # Safety pathway: push AWAY from the reference
         perturbed_safety = (clean_pixels_safety + delta).clamp(0, 1)
 
-        hidden_states_safety_perturbed = get_hidden(vlm, inputs_safety, to_normalised(perturbed_safety), args)
+        hidden_states_safety_perturbed = get_hidden(
+            vlm, inputs_safety, to_normalised(perturbed_safety), args
+        )
         # the MSE distance between the clean hidden centroid
         loss_safety = F.mse_loss(hidden_states_safety_perturbed, safe_centroid.detach())
 
         # Description pathway: stay CLOSE to clean
         perturbed_description = (clean_pixels_description + delta).clamp(0, 1)
-        hidden_states_description_perturbed = get_hidden(vlm, inputs_description, to_normalised(perturbed_description), args)
-        loss_description = F.mse_loss(hidden_states_description_perturbed, hidden_states_description_clean.detach())
+        hidden_states_description_perturbed = get_hidden(
+            vlm, inputs_description, to_normalised(perturbed_description), args
+        )
+        loss_description = F.mse_loss(
+            hidden_states_description_perturbed,
+            hidden_states_description_clean.detach(),
+        )
 
         # We want to MAXIMIZE loss_safety and MINIMIZE loss_desc
         # So we minimize: -loss_safety + mu * loss_desc
@@ -207,28 +250,32 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
             delta.data -= args.alpha * grad.sign()
             # bound the attack
             delta.data.clamp_(-args.epsilon, args.epsilon)
-            delta.data = (
-                (clean_pixels_safety + delta.data).clamp(0, 1) - clean_pixels_safety
-            )
+            delta.data = (clean_pixels_safety + delta.data).clamp(
+                0, 1
+            ) - clean_pixels_safety
             # Keep temporal copies identical for Qwen
-            if delta.dim() == 2: 
+            if delta.dim() == 2:
                 Tp = processor.image_processor.temporal_patch_size
                 d = delta.data.view(delta.shape[0], 3, Tp, -1)
                 d.copy_(d.mean(dim=2, keepdim=True).expand_as(d))
             delta.grad = None
 
         # keep track of the loss
-        loss_history.append({
-            "step": step,
-            "loss_safety": loss_safety.item(),
-            "loss_description": loss_description.item(),
-            "loss_total": loss.item(),
-        })
+        loss_history.append(
+            {
+                "step": step,
+                "loss_safety": loss_safety.item(),
+                "loss_description": loss_description.item(),
+                "loss_total": loss.item(),
+            }
+        )
 
         if step % 20 == 0:
-            print(f"  Step {step:4d}: safety_dist={loss_safety.item():.4f}  "
-                  f"desc_drift={loss_description.item():.4f}  "
-                  f"total={loss.item():.4f}")
+            print(
+                f"  Step {step:4d}: safety_dist={loss_safety.item():.4f}  "
+                f"desc_drift={loss_description.item():.4f}  "
+                f"total={loss.item():.4f}"
+            )
         del hidden_states_safety_perturbed, hidden_states_description_perturbed
         torch.cuda.empty_cache()
 
@@ -239,13 +286,15 @@ def attack(vlm, processor, image, safe_centroid, hidden_states_description_clean
         ip = processor.image_processor
         t, h, w = inputs_safety["image_grid_thw"][0].tolist()
         m, P, T = ip.merge_size, ip.patch_size, ip.temporal_patch_size
-        x = perturbed_final.view(t, h//m, w//m, m, m, 3, T, P, P)
-        img = x.permute(0, 6, 5, 1, 3, 7, 2, 4, 8).reshape(t*T, 3, h*P, w*P)[0]
+        x = perturbed_final.view(t, h // m, w // m, m, m, 3, T, P, P)
+        img = x.permute(0, 6, 5, 1, 3, 7, 2, 4, 8).reshape(t * T, 3, h * P, w * P)[0]
     else:
         img = perturbed_final[0]
         if img.dim() == 4:
             img = img[0]
-    image_u8 = (img.permute(1,2,0).float().cpu().numpy() * 255).round().astype("uint8")
+    image_u8 = (
+        (img.permute(1, 2, 0).float().cpu().numpy() * 255).round().astype("uint8")
+    )
 
     return to_normalised(perturbed_final), delta.detach(), loss_history, image_u8
 
@@ -259,10 +308,9 @@ def generate(vlm, processor, pixel_values, prompt, image, max_tokens=150):
 
     # checking the max and min values to the images
     print(pixel_values.min().item(), pixel_values.max().item())
-    
+
     with torch.no_grad():
-        ids = vlm.generate(**inputs, max_new_tokens=max_tokens,
-                           do_sample=False)
+        ids = vlm.generate(**inputs, max_new_tokens=max_tokens, do_sample=False)
     input_len = inputs["input_ids"].shape[1]
 
     # converts the generated tokens back into a string
@@ -270,7 +318,18 @@ def generate(vlm, processor, pixel_values, prompt, image, max_tokens=150):
         ids[0][input_len:], skip_special_tokens=True
     ).strip()
 
-def run_attack_for_image(vlm, processor, reference_centroid, prompt_description, prompt_safety, image, image_id, direction,  args):
+
+def run_attack_for_image(
+    vlm,
+    processor,
+    reference_centroid,
+    prompt_description,
+    prompt_safety,
+    image,
+    image_id,
+    direction,
+    args,
+):
     t0 = time.time()
 
     # Get clean description reference for this image
@@ -282,14 +341,10 @@ def run_attack_for_image(vlm, processor, reference_centroid, prompt_description,
 
     # Get clean responses before attack
     print("\n=== Clean responses ===")
-    inputs_clean = prepare_inputs(
-        processor, image, prompt_safety
-    )
+    inputs_clean = prepare_inputs(processor, image, prompt_safety)
     clean_pixels = inputs_clean["pixel_values"].detach()
 
-    safety_clean = generate(
-        vlm, processor, clean_pixels, prompt_safety, image
-    )
+    safety_clean = generate(vlm, processor, clean_pixels, prompt_safety, image)
     description_clean = generate(
         vlm, processor, clean_pixels, prompt_description, image
     )
@@ -299,17 +354,24 @@ def run_attack_for_image(vlm, processor, reference_centroid, prompt_description,
     # Run attack
     print(f"\n=== Running PGD ({args.steps} steps, eps={args.epsilon}) ===")
     perturbed, delta, loss_history, image_u8 = attack(
-        vlm, processor, image, reference_centroid, hidden_states_description_clean,
-        prompt_safety, prompt_description, direction, args
+        vlm,
+        processor,
+        image,
+        reference_centroid,
+        hidden_states_description_clean,
+        prompt_safety,
+        prompt_description,
+        direction,
+        args,
     )
 
-    Image.fromarray(image_u8).save(os.path.join(args.output_dir, f"{image_id}_pert.png"))
+    Image.fromarray(image_u8).save(
+        os.path.join(args.output_dir, f"{image_id}_pert.png")
+    )
 
     # Get perturbed responses
     print("\n=== Perturbed responses ===")
-    safety_perturbed = generate(
-        vlm, processor, perturbed, prompt_safety, image
-    )
+    safety_perturbed = generate(vlm, processor, perturbed, prompt_safety, image)
     description_perturbed = generate(
         vlm, processor, perturbed, prompt_description, image
     )
@@ -321,18 +383,19 @@ def run_attack_for_image(vlm, processor, reference_centroid, prompt_description,
     delta_l2 = delta.norm(2).item()
     print(f"\n  delta L_inf: {delta_linf:.6f}")
     print(f"  delta L_2:   {delta_l2:.4f}")
-    
+
     with torch.no_grad():
         h_s_clean = get_hidden(vlm, inputs_clean, clean_pixels, args)
         h_s = get_hidden(vlm, inputs_clean, perturbed, args)
         h_d = get_hidden(vlm, inputs_d, perturbed, args)
         cos_safety = F.cosine_similarity(h_s, reference_centroid, dim=-1).item()
-        cos_desc = F.cosine_similarity(h_d, hidden_states_description_clean, dim=-1).item()
-
+        cos_desc = F.cosine_similarity(
+            h_d, hidden_states_description_clean, dim=-1
+        ).item()
 
     # Save results
     results = {
-        "model_name": args.model_name,     
+        "model_name": args.model_name,
         "target_image": image_id,
         "layer_from_last": args.layer_from_last,
         "pooling_method": args.pooling_method,
@@ -376,6 +439,7 @@ def find_image(path_dir, name):
             return path
     return None
 
+
 def process_dataset(dataset_dir):
     pairs = []
     safe_reference_images = []
@@ -383,7 +447,7 @@ def process_dataset(dataset_dir):
         if not pair_dir.is_dir():
             continue
         harmful_dir = find_image(pair_dir, "harmful")
-        safe_dir    = find_image(pair_dir, "safe")
+        safe_dir = find_image(pair_dir, "safe")
         if harmful_dir and safe_dir:
             safe_image = Image.open(safe_dir).convert("RGB")
             harmful_image = Image.open(harmful_dir).convert("RGB")
@@ -392,16 +456,19 @@ def process_dataset(dataset_dir):
 
     return pairs, safe_reference_images
 
+
 def get_result_path(args, direction, image_id):
     return os.path.join(
         args.output_dir,
-        f"results_{args.pooling_method}_{args.layer_from_last}_{args.model_name}_mu{args.mu}_epsilon{args.epsilon}_{direction}_{image_id}_steps{args.steps}.json"
-        )
+        f"results_{args.pooling_method}_{args.layer_from_last}_{args.model_name}_mu{args.mu}_epsilon{args.epsilon}_{direction}_{image_id}_steps{args.steps}.json",
+    )
+
 
 def find_existing_results(args, direction, image_id):
     name = os.path.basename(get_result_path(args, direction, image_id))
     hits = list(Path(args.output_dir).rglob(name))
     return hits[0] if hits else None
+
 
 def main():
     """Run everything."""
@@ -425,28 +492,38 @@ def main():
     pairs, safe_reference_images = process_dataset(dataset_dir)
 
     print(f"Found {len(pairs)} pairs in {dataset_dir}")
-    
+
     if not pairs:
         print("No pairs found.")
         return
 
     safe_centroid, _ = compute_references(
-            vlm, processor, safe_reference_images, prompt_safety, prompt_description, args
-        )
-
+        vlm, processor, safe_reference_images, prompt_safety, prompt_description, args
+    )
 
     for pair_id, harmful_image, safe_image in pairs:
         # safe to harmful and harmful to safe
-        jobs = [(safe_image, f"{pair_id}_safe", -1.0),
-                (harmful_image, f"{pair_id}_harmful", 1.0)]
+        jobs = [
+            (safe_image, f"{pair_id}_safe", -1.0),
+            (harmful_image, f"{pair_id}_harmful", 1.0),
+        ]
         for image, image_id, direction in jobs:
             if find_existing_results(args, direction, image_id) is not None:
                 print(f"Skipping {image_id} (done)")
                 continue
             print(f"Running attack for image {pair_id}")
-            run_attack_for_image(vlm, processor, safe_centroid,
-                                prompt_description, prompt_safety,
-                                image, image_id, direction, args)
-        
+            run_attack_for_image(
+                vlm,
+                processor,
+                safe_centroid,
+                prompt_description,
+                prompt_safety,
+                image,
+                image_id,
+                direction,
+                args,
+            )
+
+
 if __name__ == "__main__":
     main()

@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=48G
 #SBATCH --time=08:00:00
-#SBATCH --output=logs/mu_%A_%a.out
+#SBATCH --output=logs/epsilon_%A_%a.out
 #SBATCH --array=0-6
 
 mkdir -p logs

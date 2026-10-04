@@ -26,23 +26,23 @@ import torch.nn.functional as F
 from PIL import Image
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 
-SORTED_DIR   = "./sorted"          # folder containing pair subfolders
-OUTPUT_DIR   = "./attack_results"  # where per-pair results + summary go
+SORTED_DIR = "./sorted"  # folder containing pair subfolders
+OUTPUT_DIR = "./attack_results"  # where per-pair results + summary go
 
-PGD_STEPS    = 500                 # match proposal preliminary results
-EPSILON      = 0.06                # match proposal preliminary results
-ALPHA        = 0.001
-MU           = 10.0                # weight on description preservation
-LAYER        = -1                  # which hidden layer (-1 = last)
-POOL         = "last_token"        # "last_token" or "mean"
-DEVICE       = "cuda" if torch.cuda.is_available() else "cpu"
-MAX_TOKENS   = 50
+PGD_STEPS = 500  # match proposal preliminary results
+EPSILON = 0.06  # match proposal preliminary results
+ALPHA = 0.001
+MU = 10.0  # weight on description preservation
+LAYER = -1  # which hidden layer (-1 = last)
+POOL = "last_token"  # "last_token" or "mean"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+MAX_TOKENS = 50
 
 # Number of reference images to average for the safe centroid
 # These are drawn from the safe images in sorted/ excluding the current pair
@@ -55,6 +55,7 @@ PROMPT_SAFETY = (
 PROMPT_DESC = "Describe this image in detail."
 
 # ── MODEL ─────────────────────────────────────────────────────────────────────
+
 
 def load_vlm():
     from transformers import (
@@ -87,12 +88,20 @@ def load_vlm():
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
+
 def prepare_inputs(processor, image, prompt):
-    conversation = [{"role": "user", "content": [
-        {"type": "image"},
-        {"type": "text", "text": prompt},
-    ]}]
-    text_prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
+    conversation = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": prompt},
+            ],
+        }
+    ]
+    text_prompt = processor.apply_chat_template(
+        conversation, add_generation_prompt=True
+    )
     inputs = processor(text=text_prompt, images=image, return_tensors="pt")
     return {k: v.to(DEVICE) for k, v in inputs.items()}
 
@@ -126,9 +135,13 @@ def generate(vlm, processor, pixel_values, prompt, image):
     inputs = prepare_inputs(processor, image, prompt)
     inputs["pixel_values"] = pixel_values
     with torch.no_grad():
-        ids = vlm.generate(**inputs, max_new_tokens=MAX_TOKENS, do_sample=False, use_cache=False)
+        ids = vlm.generate(
+            **inputs, max_new_tokens=MAX_TOKENS, do_sample=False, use_cache=False
+        )
     input_len = inputs["input_ids"].shape[1]
-    return processor.tokenizer.decode(ids[0][input_len:], skip_special_tokens=True).strip()
+    return processor.tokenizer.decode(
+        ids[0][input_len:], skip_special_tokens=True
+    ).strip()
 
 
 def tensor_to_pil(pixel_tensor, original_image):
@@ -181,6 +194,7 @@ def apply_delta_to_pil(clean_tensor, perturbed_tensor, original_image):
 
 # ── REFERENCE CENTROID ────────────────────────────────────────────────────────
 
+
 def compute_reference_centroid(vlm, processor, ref_images):
     """
     Compute the safe reference centroid by averaging hidden states
@@ -202,6 +216,7 @@ def compute_reference_centroid(vlm, processor, ref_images):
 
 # ── ATTACK ────────────────────────────────────────────────────────────────────
 
+
 def attack(vlm, processor, image, h_ref, h_desc_clean, push_away=True):
     """
     Run PGD attack.
@@ -209,7 +224,7 @@ def attack(vlm, processor, image, h_ref, h_desc_clean, push_away=True):
     push_away=False: push safety hidden states TOWARD h_ref (harmful→safe)
     """
     inputs_safety = prepare_inputs(processor, image, PROMPT_SAFETY)
-    inputs_desc   = prepare_inputs(processor, image, PROMPT_DESC)
+    inputs_desc = prepare_inputs(processor, image, PROMPT_DESC)
 
     clean_pix_s = inputs_safety["pixel_values"].detach().clone().float()
     clean_pix_d = inputs_desc["pixel_values"].detach().clone().float()
@@ -234,17 +249,21 @@ def attack(vlm, processor, image, h_ref, h_desc_clean, push_away=True):
             grad = delta.grad.detach()
             delta.data -= ALPHA * grad.sign()
             delta.data.clamp_(-EPSILON, EPSILON)
-            delta.data = ((clean_pix_s + delta.data).clamp(0, 1) - clean_pix_s)
+            delta.data = (clean_pix_s + delta.data).clamp(0, 1) - clean_pix_s
             delta.grad = None
 
-        loss_history.append({
-            "step": step,
-            "loss_safety": loss_safety.item(),
-            "loss_desc": loss_desc.item(),
-        })
+        loss_history.append(
+            {
+                "step": step,
+                "loss_safety": loss_safety.item(),
+                "loss_desc": loss_desc.item(),
+            }
+        )
 
         if step % 50 == 0:
-            print(f"    Step {step:4d}: safety_dist={loss_safety.item():.4f}  desc_drift={loss_desc.item():.4f}")
+            print(
+                f"    Step {step:4d}: safety_dist={loss_safety.item():.4f}  desc_drift={loss_desc.item():.4f}"
+            )
 
         del h_s, h_d, perturbed_s, perturbed_d, loss_safety, loss_desc, loss
         if DEVICE == "cuda":
@@ -255,6 +274,7 @@ def attack(vlm, processor, image, h_ref, h_desc_clean, push_away=True):
 
 
 # ── PER-PAIR RUNNER ───────────────────────────────────────────────────────────
+
 
 def collect_reference_images(sorted_dir, exclude_pair_id, n=NUM_REFERENCE_IMAGES):
     """
@@ -273,12 +293,14 @@ def collect_reference_images(sorted_dir, exclude_pair_id, n=NUM_REFERENCE_IMAGES
     return [Image.open(p).convert("RGB") for p in ref_paths]
 
 
-def run_pair(vlm, processor, pair_id, harmful_path, safe_path, pair_out_dir, sorted_dir):
+def run_pair(
+    vlm, processor, pair_id, harmful_path, safe_path, pair_out_dir, sorted_dir
+):
     """Run both attack directions for one pair. Returns summary dict."""
     pair_out_dir.mkdir(parents=True, exist_ok=True)
 
     harmful_img = Image.open(harmful_path).convert("RGB")
-    safe_img    = Image.open(safe_path).convert("RGB")
+    safe_img = Image.open(safe_path).convert("RGB")
 
     results = {"pair_id": pair_id, "harmful": str(harmful_path), "safe": str(safe_path)}
 
@@ -288,14 +310,14 @@ def run_pair(vlm, processor, pair_id, harmful_path, safe_path, pair_out_dir, sor
     h_ref = compute_reference_centroid(vlm, processor, ref_images)
 
     for direction, target_img, label in [
-        ("safe_to_harmful", safe_img,    "A"),
+        ("safe_to_harmful", safe_img, "A"),
         ("harmful_to_safe", harmful_img, "B"),
     ]:
         print(f"\n  [{label}] Direction: {direction}")
         dir_out = pair_out_dir / direction
         dir_out.mkdir(exist_ok=True)
 
-        push_away = (direction == "safe_to_harmful")
+        push_away = direction == "safe_to_harmful"
 
         # Description reference for this target image
         with torch.no_grad():
@@ -307,7 +329,7 @@ def run_pair(vlm, processor, pair_id, harmful_path, safe_path, pair_out_dir, sor
         inputs_clean = prepare_inputs(processor, target_img, PROMPT_SAFETY)
         clean_pix = inputs_clean["pixel_values"].detach()
         safety_clean = generate(vlm, processor, clean_pix, PROMPT_SAFETY, target_img)
-        desc_clean   = generate(vlm, processor, clean_pix, PROMPT_DESC,   target_img)
+        desc_clean = generate(vlm, processor, clean_pix, PROMPT_DESC, target_img)
         del inputs_clean, clean_pix
         torch.cuda.empty_cache()
 
@@ -324,11 +346,11 @@ def run_pair(vlm, processor, pair_id, harmful_path, safe_path, pair_out_dir, sor
         inputs_pert = prepare_inputs(processor, perturbed_pil, PROMPT_SAFETY)
         pert_pix = inputs_pert["pixel_values"].detach()
         safety_pert = generate(vlm, processor, pert_pix, PROMPT_SAFETY, perturbed_pil)
-        desc_pert   = generate(vlm, processor, pert_pix, PROMPT_DESC,   perturbed_pil)
+        desc_pert = generate(vlm, processor, pert_pix, PROMPT_DESC, perturbed_pil)
         del inputs_pert, pert_pix
 
         delta_linf = delta.abs().max().item()
-        delta_l2   = delta.norm(2).item()
+        delta_l2 = delta.norm(2).item()
 
         print(f"    Safety clean:     {safety_clean[:120]}")
         print(f"    Safety perturbed: {safety_pert[:120]}")
@@ -337,15 +359,15 @@ def run_pair(vlm, processor, pair_id, harmful_path, safe_path, pair_out_dir, sor
 
         # Save per-direction results
         dir_result = {
-            "direction":         direction,
-            "safety_clean":      safety_clean,
-            "safety_perturbed":  safety_pert,
-            "desc_clean":        desc_clean,
-            "desc_perturbed":    desc_pert,
-            "delta_linf":        delta_linf,
-            "delta_l2":          delta_l2,
+            "direction": direction,
+            "safety_clean": safety_clean,
+            "safety_perturbed": safety_pert,
+            "desc_clean": desc_clean,
+            "desc_perturbed": desc_pert,
+            "delta_linf": delta_linf,
+            "delta_l2": delta_l2,
             "final_safety_dist": loss_history[-1]["loss_safety"],
-            "final_desc_drift":  loss_history[-1]["loss_desc"],
+            "final_desc_drift": loss_history[-1]["loss_desc"],
         }
         with open(dir_out / "results.json", "w") as f:
             json.dump(dir_result, f, indent=2)
@@ -354,7 +376,7 @@ def run_pair(vlm, processor, pair_id, harmful_path, safe_path, pair_out_dir, sor
         steps = [h["step"] for h in loss_history]
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.plot(steps, [h["loss_safety"] for h in loss_history], label="safety dist")
-        ax.plot(steps, [h["loss_desc"]   for h in loss_history], label="desc drift")
+        ax.plot(steps, [h["loss_desc"] for h in loss_history], label="desc drift")
         ax.set_xlabel("PGD step")
         ax.set_ylabel("MSE")
         ax.set_title(f"Pair {pair_id} — {direction}")
@@ -363,12 +385,12 @@ def run_pair(vlm, processor, pair_id, harmful_path, safe_path, pair_out_dir, sor
         plt.savefig(dir_out / "loss_curve.png", dpi=120)
         plt.close()
 
-        results[f"{direction}_safety_clean"]     = safety_clean
+        results[f"{direction}_safety_clean"] = safety_clean
         results[f"{direction}_safety_perturbed"] = safety_pert
-        results[f"{direction}_delta_linf"]       = delta_linf
-        results[f"{direction}_delta_l2"]         = delta_l2
-        results[f"{direction}_safety_dist"]      = loss_history[-1]["loss_safety"]
-        results[f"{direction}_desc_drift"]       = loss_history[-1]["loss_desc"]
+        results[f"{direction}_delta_linf"] = delta_linf
+        results[f"{direction}_delta_l2"] = delta_l2
+        results[f"{direction}_safety_dist"] = loss_history[-1]["loss_safety"]
+        results[f"{direction}_desc_drift"] = loss_history[-1]["loss_desc"]
 
         # Cleanup
         del perturbed, clean_pix_s, delta, h_desc_clean
@@ -387,6 +409,7 @@ def run_pair(vlm, processor, pair_id, harmful_path, safe_path, pair_out_dir, sor
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
+
 def main():
     sorted_dir = Path(SORTED_DIR)
     output_dir = Path(OUTPUT_DIR)
@@ -397,7 +420,7 @@ def main():
         if not pair_dir.is_dir():
             continue
         harmful = pair_dir / "harmful.jpg"
-        safe    = pair_dir / "safe.jpg"
+        safe = pair_dir / "safe.jpg"
         if harmful.exists() and safe.exists():
             pairs.append((pair_dir.name, harmful, safe))
 
@@ -421,8 +444,13 @@ def main():
 
         try:
             result = run_pair(
-                vlm, processor, pair_id, harmful_path, safe_path,
-                pair_out_dir, sorted_dir
+                vlm,
+                processor,
+                pair_id,
+                harmful_path,
+                safe_path,
+                pair_out_dir,
+                sorted_dir,
             )
             all_results.append(result)
         except Exception as e:
@@ -444,10 +472,14 @@ def save_summary(all_results, failed, output_dir):
     csv_path = output_dir / "summary.csv"
     fieldnames = [
         "pair_id",
-        "safe_to_harmful_safety_clean", "safe_to_harmful_safety_perturbed",
-        "safe_to_harmful_delta_linf", "safe_to_harmful_safety_dist",
-        "harmful_to_safe_safety_clean", "harmful_to_safe_safety_perturbed",
-        "harmful_to_safe_delta_linf", "harmful_to_safe_safety_dist",
+        "safe_to_harmful_safety_clean",
+        "safe_to_harmful_safety_perturbed",
+        "safe_to_harmful_delta_linf",
+        "safe_to_harmful_safety_dist",
+        "harmful_to_safe_safety_clean",
+        "harmful_to_safe_safety_perturbed",
+        "harmful_to_safe_delta_linf",
+        "harmful_to_safe_safety_dist",
     ]
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
