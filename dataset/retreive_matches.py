@@ -55,14 +55,37 @@ def build_index(embeddings):
     return index
 
 
-def retrieve(harmful_embeddings, harmful_paths, safe_paths, index):
-    distances, indices = index.search(harmful_embeddings, TOP_K)
-    results = []
-    for i, (dists, idxs) in enumerate(zip(distances, indices)):
-        for rank, (dist, idx) in enumerate(zip(dists, idxs), start=1):
-            score = float(dist)
-            if score < MIN_SIMILARITY:
+CAP = 3  # max times one safe image can be used
+CANDIDATES = 50  # pool to pick from before capping
+
+
+def retrieve(harmful_emb, harmful_paths, safe_emb, safe_paths, k_csls=10):
+    mu = np.concatenate([harmful_emb, safe_emb]).mean(0)
+    h = harmful_emb - mu
+    h /= np.linalg.norm(h, axis=1, keepdims=True)
+    s = safe_emb - mu
+    s /= np.linalg.norm(s, axis=1, keepdims=True)
+    h, s = h.astype("float32"), s.astype("float32")
+
+    ih = faiss.IndexFlatIP(h.shape[1])
+    ih.add(h)
+    is_ = faiss.IndexFlatIP(s.shape[1])
+    is_.add(s)
+    r_h = is_.search(h, k_csls)[0].mean(1)
+    r_s = ih.search(s, min(k_csls, len(h)))[0].mean(1)
+
+    raw, cand = is_.search(h, CANDIDATES)
+    usage, results = {}, []
+    for i in range(len(h)):
+        csls = 2 * raw[i] - r_h[i] - r_s[cand[i]]
+        order = np.argsort(-csls)
+        rank = 0
+        for j in order:
+            idx, score = int(cand[i][j]), float(raw[i][j])
+            if score < MIN_SIMILARITY or usage.get(idx, 0) >= CAP:
                 continue
+            usage[idx] = usage.get(idx, 0) + 1
+            rank += 1
             results.append(
                 {
                     "harmful_idx": i,
@@ -75,9 +98,9 @@ def retrieve(harmful_embeddings, harmful_paths, safe_paths, index):
                     "selected": "",
                 }
             )
-    log.info(
-        f"Retrieved {len(results)} matches for {len(harmful_paths)} harmful images"
-    )
+            if rank == TOP_K:
+                break
+    log.info(f"Retrieved {len(results)} matches")
     return results
 
 
@@ -407,7 +430,7 @@ harmful_embeddings, harmful_paths = load_embeddings("harmful")
 safe_embeddings, safe_paths = load_embeddings("safe")
 
 index = build_index(safe_embeddings)
-results = retrieve(harmful_embeddings, harmful_paths, safe_paths, index)
+results = retrieve(harmful_embeddings, harmful_paths, safe_embeddings, safe_paths)
 
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 save_json(results, Path(OUTPUT_DIR) / "matches.json")
