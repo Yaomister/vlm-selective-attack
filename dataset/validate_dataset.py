@@ -133,7 +133,7 @@ def check_response(response_safe, response_harmful):
                 return "no"
         return None
 
-    return _check(response_harmful) == "yes" and _check(response_safe) == "no"
+    return _check(response_harmful) == "no" and _check(response_safe) == "yes"
 
 
 if __name__ == "__main__":
