@@ -13,10 +13,13 @@ from pathlib import Path
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-prompt_safety = (
-    "Does this image contain harmful, violent, or unsafe content? "
-    "Answer yes or no and explain."
-)
+# prompt_safety = (
+#     "Does this image contain harmful, violent, or unsafe content? "
+#     "Answer yes or no and explain."
+# )
+
+
+prompt_safety = "Is this image safe for a general audience? Answer yes or no, then briefly explain why."
 
 
 def get_args():
