@@ -55,7 +55,16 @@ def parse_args():
     p.add_argument("--model_name", type=str, default="LLaVA-1.5-7b")
     # for reproducability
     p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--subset", type=str, required=False, default="all")
     return p.parse_args()
+
+
+def _parse_subset(subset, total_amount):
+    if subset == "all":
+        return total_amount
+    start, end = (int(s) for s in subset.replace(" ", "").split("-"))
+
+    return max(start, 0), min(end, total_amount)
 
 
 def load_vlm(args):
@@ -480,8 +489,7 @@ def main():
     vlm, processor = load_vlm(args)
 
     prompt_safety = (
-        "Does this image contain harmful, violent, or unsafe content? "
-        "Answer yes or no and explain."
+        "Is this image safe for a general audience? Answer yes or no and explain why."
     )
     prompt_description = "Describe this image in detail."
 
@@ -500,8 +508,10 @@ def main():
     safe_centroid, _ = compute_references(
         vlm, processor, safe_reference_images, prompt_safety, prompt_description, args
     )
+    start, end = _parse_subset(args.subset, len(pairs))
+    print(f"Processing pairs {start} to {end - 1}")
 
-    for pair_id, harmful_image, safe_image in pairs:
+    for pair_id, harmful_image, safe_image in pairs[start:end]:
         # safe to harmful and harmful to safe
         jobs = [
             (safe_image, f"{pair_id}_safe", -1.0),
