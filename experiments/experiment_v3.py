@@ -311,11 +311,11 @@ def attack(
                 key=lambda cr: abs(cr[0] / cr[1] - W / H),
             )
 
-            _, C, tw, th = tiles.shape
+            _, C, th, tw = tiles.shape
             img = (
-                tiles.view(rows, cols, C, tw, th)
+                tiles.view(rows, cols, C, th, tw)
                 .permute(2, 0, 3, 1, 4)
-                .reshape(C, rows * tw, cols * th)
+                .reshape(C, rows * th, cols * tw)
             )
     else:
         img = perturbed_final[0]
