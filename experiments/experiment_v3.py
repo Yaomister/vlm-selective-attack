@@ -61,7 +61,7 @@ def parse_args():
 
 def _parse_subset(subset, total_amount):
     if subset == "all":
-        return total_amount
+        return 0, total_amount
     start, end = (int(s) for s in subset.replace(" ", "").split("-"))
 
     return max(start, 0), min(end, total_amount)
