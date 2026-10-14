@@ -1,0 +1,31 @@
+[project]
+name = "vlm-selective-attack"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { email = "ericyaohan@yahoo.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "accelerate>=1.15.0",
+    "clip",
+    "faiss-cpu>=1.7.4",
+    "flask>=3.0.0",
+    "numpy>=1.24.0",
+    "pillow>=9.5.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "tqdm>=4.65.0",
+    "transformers>=5.19.0",
+]
+
+[project.scripts]
+vlm-selective-attack = "vlm_selective_attack:main"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+clip = { git = "https://github.com/openai/CLIP.git" }
