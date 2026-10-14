@@ -297,6 +297,26 @@ def attack(
         m, P, T = ip.merge_size, ip.patch_size, ip.temporal_patch_size
         x = perturbed_final.view(t, h // m, w // m, m, m, 3, T, P, P)
         img = x.permute(0, 6, 5, 1, 3, 7, 2, 4, 8).reshape(t * T, 3, h * P, w * P)[0]
+    elif args.model_name == "InternVL":
+        tiles = perturbed_final
+        if tiles.shape[0] == 1:
+            img = tiles[0]
+        else:
+            # last one is the thumbnail
+            tiles = tiles[:-1]
+            n = tiles.shape[0]
+            W, H = image.size
+            cols, rows = min(
+                ((c, n // c) for c in range(1, n + 1) if n % c == 0),
+                key=lambda cr: abs(cr[0] / cr[1] - W / H),
+            )
+
+            _, C, tw, th = tiles.shape
+            img = (
+                tiles.view(rows, cols, C, tw, th)
+                .permute(2, 0, 3, 1, 4)
+                .reshape(C, rows * tw, cols * th)
+            )
     else:
         img = perturbed_final[0]
         if img.dim() == 4:
