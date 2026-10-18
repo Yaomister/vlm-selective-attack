@@ -15,7 +15,7 @@ source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
 LAYERS=(-1 -2 -4 -8 -16)   
 LAYER=${LAYERS[$SLURM_ARRAY_TASK_ID]}
 
-python experiments/experiment_v3.py \
+python experiments/experiment_v4.py \
   --model_name InternVL \
   --dataset_dir ./sorted \
   --output_dir ./attack_results/InternVL/pooling_method_$LAYER \

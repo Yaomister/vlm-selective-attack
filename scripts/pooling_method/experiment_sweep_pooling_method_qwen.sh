@@ -15,7 +15,7 @@ source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
 POOLS=(last_token mean image_only)  
 POOL=${POOLS[$SLURM_ARRAY_TASK_ID]}
 
-python experiments/experiment_v3.py \
+python experiments/experiment_v4.py \
   --model_name Qwen-VL \
   --dataset_dir ./sorted \
   --output_dir ./attack_results/Qwen-VL/pooling_method_$POOL \

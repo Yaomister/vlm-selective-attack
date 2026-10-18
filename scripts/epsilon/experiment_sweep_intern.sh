@@ -15,7 +15,7 @@ source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
 EPSILONS=(0.01 0.025 0.05 0.1 0.25 0.5 1)
 EPSILON=${EPSILONS[$SLURM_ARRAY_TASK_ID]}
 
-python experiments/experiment_v3.py \
+python experiments/experiment_v4.py \
   --model_name InternVL \
   --dataset_dir ./sorted \
   --output_dir ./attack_results/InternVL/epsilon_$EPSILON \
