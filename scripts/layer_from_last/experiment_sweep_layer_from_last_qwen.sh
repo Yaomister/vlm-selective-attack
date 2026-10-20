@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=layer_from_last
 #SBATCH --partition=multigpu
-#SBATCH --gres=gpu:a100:4
+#SBATCH --gres=gpu:h200:4
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=48G
 #SBATCH --time=24:00:00
