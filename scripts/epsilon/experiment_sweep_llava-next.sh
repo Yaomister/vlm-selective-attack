@@ -15,7 +15,7 @@ source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
 EPSILONS=(0.01 0.025 0.05 0.1 0.25 0.5 1)
 EPSILON=${EPSILONS[$SLURM_ARRAY_TASK_ID]}
 
-python experiments/experiment_v4.py \
+torchrun --standalone --nproc_per_node=4 experiments/experiment_v4.py \
   --model_name LLaVA-NeXT \
   --dataset_dir ./sorted \
   --output_dir ./attack_results/LLaVA-NeXT/epsilon_$EPSILON \

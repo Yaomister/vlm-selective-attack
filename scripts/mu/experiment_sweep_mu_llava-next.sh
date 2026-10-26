@@ -15,7 +15,7 @@ source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
 MUS=(1 2 5 10 20)
 MU=${MUS[$SLURM_ARRAY_TASK_ID]}
 
-python experiments/experiment_v4.py \
+torchrun --standalone --nproc_per_node=4 experiments/experiment_v4.py \
   --model_name LLaVA-NeXT \
   --dataset_dir ./sorted \
   --output_dir ./attack_results/LLaVA-NeXT/mu_$MU \

@@ -24,7 +24,7 @@ def _set_up():
     """Set up DDP for the multipartition cluster."""
     global device
     rank = int(os.environ.get("RANK", 0))
-    world_rank = int(os.environ.get("WORLD_RANK", 1))
+    world_rank = int(os.environ.get("WORLD_SIZE", 1))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     if torch.cuda.is_available():
         torch.cuda.set_device(local_rank)
