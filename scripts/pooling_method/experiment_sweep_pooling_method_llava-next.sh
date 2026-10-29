@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=pooling_method
 #SBATCH --partition=multigpu
-#SBATCH --gres=gpu:a100:4
+#SBATCH --gres=gpu:h200:4
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=48G
 #SBATCH --time=24:00:00
@@ -15,7 +15,7 @@ source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
 POOLS=(last_token mean image_only)  
 POOL=${POOLS[$SLURM_ARRAY_TASK_ID]}
 
-torchrun --standalone --nproc_per_node=4 experiments/experiment_v4.py \
+python experiments/experiment_v4.py \
   --model_name LLaVA-NeXT \
   --dataset_dir ./sorted \
   --output_dir ./attack_results/LLaVA-NeXT/pooling_method_$POOL \

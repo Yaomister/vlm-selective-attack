@@ -6,6 +6,8 @@ Version with DDP
 
 import os
 
+from shared import model_ids
+
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import json
@@ -86,12 +88,6 @@ def _parse_subset(subset, total_amount):
 
 def load_vlm(args):
     """Load the VLM model."""
-    model_ids = {
-        "LLaVA-1.5-7b": "llava-hf/llava-1.5-7b-hf",
-        "LLaVA-NeXT": "llava-hf/llama3-llava-next-8b-hf",
-        "InternVL": "OpenGVLab/InternVL3-8B-hf",
-        "Qwen-VL": "Qwen/Qwen2.5-VL-7B-Instruct",
-    }
 
     assert args.model_name in model_ids, "unknown vlm model."
 
