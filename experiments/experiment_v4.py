@@ -546,7 +546,9 @@ def main():
     start, end = _parse_subset(args.subset, len(pairs))
     print(f"Processing pairs {start} to {end - 1}")
 
-    for pair_id, harmful_image, safe_image in pairs[start:end][rank::world_rank]:
+    for pair_id, harmful_image, safe_image in pairs[start:end][
+        rank :: min(world_rank, torch.cuda.device_count())
+    ]:
         # safe to harmful and harmful to safe
         jobs = [
             (safe_image, f"{pair_id}_safe", -1.0),
