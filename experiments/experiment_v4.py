@@ -92,17 +92,28 @@ def parse_args():
         help="The folder containing the sorted pairs.",
     )
     # the name of the vlm we're running the attacks on
-    p.add_argument("--model_name", type=str, default="LLaVA-1.5-7b" help="The name of the VLM model")
+    p.add_argument(
+        "--model_name",
+        type=str,
+        default="LLaVA-1.5-7b",
+        help="The name of the VLM model",
+    )
     # for reproducability
     p.add_argument("--seed", type=int, default=1)
-    p.add_argument("--subset", type=str, required=False, default="all", help="The subset of pairs to run the attack on (for compute bottleneck purposes.)")
+    p.add_argument(
+        "--subset",
+        type=str,
+        required=False,
+        default="all",
+        help="The subset of pairs to run the attack on (for compute bottleneck purposes.)",
+    )
     return p.parse_args()
 
 
 def _parse_subset(subset, total_amount):
     if subset == "all":
         return 0, total_amount
-    
+
     start, end = (int(s) for s in subset.replace(" ", "").split("-"))
 
     return max(start, 0), min(end, total_amount)
@@ -155,7 +166,7 @@ def get_hidden(vlm, inputs, pixel_values, args):
 
     if args.pooling_method == "last_token":
         return hidden_states[args.layer_from_last][:, -1, :]
-    
+
     elif args.pooling_method == "mean":
         # (batch_size, hidden_dim)
         return hidden_states[args.layer_from_last].mean(dim=1)
@@ -211,7 +222,7 @@ def process_dataset(dataset_dir):
     for pair_dir in sorted(dataset_dir.iterdir()):
         if not pair_dir.is_dir():
             continue
-        
+
         harmful_dir = find_image(pair_dir, "harmful")
         safe_dir = find_image(pair_dir, "safe")
 
@@ -226,7 +237,7 @@ def process_dataset(dataset_dir):
 
 def get_result_path(args, direction, image_id):
     """Get the json file to dump the results into."""
-    
+
     return os.path.join(
         args.output_dir,
         f"results_{args.pooling_method}_{args.layer_from_last}_{args.model_name}_mu{args.mu}_epsilon{args.epsilon}_{direction}_{image_id}_steps{args.steps}.json",
