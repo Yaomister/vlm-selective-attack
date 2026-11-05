@@ -8,20 +8,9 @@
 #SBATCH --output=logs/epsilon_%A_%a.out
 #SBATCH --array=0-6
 
-mkdir -p logs
-
-source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
+source scripts/sweep_common.sh
 
 EPSILONS=(0.01 0.025 0.05 0.1 0.25 0.5 1)
 EPSILON=${EPSILONS[$SLURM_ARRAY_TASK_ID]}
 
-python experiments/experiment_v4.py \
-  --model_name InternVL \
-  --dataset_dir ./sorted \
-  --output_dir ./attack_results/InternVL/epsilon_$EPSILON \
-  --steps 200 \
-  --epsilon $EPSILON \
-  --alpha 0.001 \
-  --mu 10 \
-  --layer_from_last -1 \
-  --pooling_method last_token
+run_attack InternVL epsilon_$EPSILON

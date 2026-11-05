@@ -155,8 +155,7 @@ def _summarize(df, param_held_constant, param_varying, metric, direction):
     )
 
 
-if __name__ == "__main__":
-
+def load_results():
     rows = []
     for p in Path("attack_results").rglob("results_*"):
         if not p.is_file():
@@ -168,7 +167,11 @@ if __name__ == "__main__":
         except (json.JSONDecodeError, UnicodeDecodeError):
             continue
 
-    df = pd.DataFrame(rows)
+    return pd.DataFrame(rows)
+
+
+def main():
+    df = load_results()
 
     df["valid"] = before_flip(df)
     df["success"] = succeeded(df)
@@ -188,3 +191,7 @@ if __name__ == "__main__":
     )
     out["success_rate"] = out["successes"] / out["n"]
     print(out.to_string())
+
+
+if __name__ == "__main__":
+    main()

@@ -8,23 +8,9 @@
 #SBATCH --output=logs/pooling_%A_%a.out
 #SBATCH --array=0-2
 
-mkdir -p logs
+source scripts/sweep_common.sh
 
-source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
-
-POOLS=(last_token mean image_only)  
+POOLS=(last_token mean image_only)
 POOL=${POOLS[$SLURM_ARRAY_TASK_ID]}
 
-python experiments/experiment_v4.py \
-  --model_name Qwen-VL \
-  --dataset_dir ./sorted \
-  --output_dir ./attack_results/Qwen-VL/pooling_method_$POOL \
-  --steps 200 \
-  --epsilon 0.025 \
-  --alpha 0.001 \
-  --mu 10 \
-  --layer_from_last -1 \
-  --pooling_method $POOL
-
-
-  
+run_attack Qwen-VL pooling_method_$POOL

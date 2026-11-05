@@ -26,6 +26,8 @@ OUTPUT_DIR = "matches"  # where results will be saved
 
 TOP_K = 10  # number of safe matches per harmful image
 MIN_SIMILARITY = 0.20  # drop matches below this cosine similarity
+CAP = 3  # max times one safe image can be used
+CANDIDATES = 50  # pool to pick from before capping
 
 # ── SETUP ─────────────────────────────────────────────────────────────────────
 
@@ -53,10 +55,6 @@ def build_index(embeddings):
     index.add(embeddings)
     log.info(f"FAISS index built  ({index.ntotal} vectors)")
     return index
-
-
-CAP = 3  # max times one safe image can be used
-CANDIDATES = 50  # pool to pick from before capping
 
 
 def retrieve(harmful_emb, harmful_paths, safe_emb, safe_paths, k_csls=10):
@@ -426,16 +424,22 @@ def print_summary(results, harmful_paths):
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
-harmful_embeddings, harmful_paths = load_embeddings("harmful")
-safe_embeddings, safe_paths = load_embeddings("safe")
 
-index = build_index(safe_embeddings)
-results = retrieve(harmful_embeddings, harmful_paths, safe_embeddings, safe_paths)
+def main():
+    harmful_embeddings, harmful_paths = load_embeddings("harmful")
+    safe_embeddings, safe_paths = load_embeddings("safe")
 
-Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
-save_json(results, Path(OUTPUT_DIR) / "matches.json")
-save_csv(results, Path(OUTPUT_DIR) / "matches.csv")
-save_html(results, Path(OUTPUT_DIR) / "report.html")
+    index = build_index(safe_embeddings)
+    results = retrieve(harmful_embeddings, harmful_paths, safe_embeddings, safe_paths)
 
-print_summary(results, harmful_paths)
-log.info("Done.")
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+    save_json(results, Path(OUTPUT_DIR) / "matches.json")
+    save_csv(results, Path(OUTPUT_DIR) / "matches.csv")
+    save_html(results, Path(OUTPUT_DIR) / "report.html")
+
+    print_summary(results, harmful_paths)
+    log.info("Done.")
+
+
+if __name__ == "__main__":
+    main()

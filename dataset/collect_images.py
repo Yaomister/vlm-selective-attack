@@ -27,50 +27,56 @@ log = logging.getLogger(__name__)
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
-sorted_dir = Path(SORTED_DIR)
-attack_dir = Path(ATTACK_RESULTS)
-output_dir = Path(OUTPUT_DIR)
-output_dir.mkdir(parents=True, exist_ok=True)
 
-missing = []
-collected = 0
+def main():
+    sorted_dir = Path(SORTED_DIR)
+    attack_dir = Path(ATTACK_RESULTS)
+    output_dir = Path(OUTPUT_DIR)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-for pair_dir in sorted(sorted_dir.iterdir()):
-    if not pair_dir.is_dir():
-        continue
+    missing = []
+    collected = 0
 
-    pair_id = pair_dir.name
-    pair_out = output_dir / pair_id
-    pair_out.mkdir(exist_ok=True)
+    for pair_dir in sorted(sorted_dir.iterdir()):
+        if not pair_dir.is_dir():
+            continue
 
-    # Original images from sorted/
-    for fname in ["harmful.jpg", "safe.jpg"]:
-        src = pair_dir / fname
-        if src.exists():
-            shutil.copy2(src, pair_out / fname)
-        else:
-            missing.append(f"{pair_id}/{fname}")
+        pair_id = pair_dir.name
+        pair_out = output_dir / pair_id
+        pair_out.mkdir(exist_ok=True)
 
-    # Perturbed images from attack_results/
-    for direction, out_name in [
-        ("safe_to_harmful", "safe_to_harmful_perturbed.png"),
-        ("harmful_to_safe", "harmful_to_safe_perturbed.png"),
-    ]:
-        src = attack_dir / pair_id / direction / "perturbed.png"
-        if src.exists():
-            shutil.copy2(src, pair_out / out_name)
-        else:
-            missing.append(f"{pair_id}/{out_name}")
+        # Original images from sorted/
+        for fname in ["harmful.jpg", "safe.jpg"]:
+            src = pair_dir / fname
+            if src.exists():
+                shutil.copy2(src, pair_out / fname)
+            else:
+                missing.append(f"{pair_id}/{fname}")
 
-    collected += 1
-    log.info(f"Collected pair {pair_id}")
+        # Perturbed images from attack_results/
+        for direction, out_name in [
+            ("safe_to_harmful", "safe_to_harmful_perturbed.png"),
+            ("harmful_to_safe", "harmful_to_safe_perturbed.png"),
+        ]:
+            src = attack_dir / pair_id / direction / "perturbed.png"
+            if src.exists():
+                shutil.copy2(src, pair_out / out_name)
+            else:
+                missing.append(f"{pair_id}/{out_name}")
 
-# Zip the output folder
-shutil.make_archive(str(output_dir), "zip", output_dir.parent, output_dir.name)
-log.info(f"Zipped → {output_dir}.zip")
+        collected += 1
+        log.info(f"Collected pair {pair_id}")
 
-log.info(f"\nDone. {collected} pairs collected.")
-if missing:
-    log.warning(f"{len(missing)} missing files:")
-    for m in missing:
-        log.warning(f"  {m}")
+    # Zip the output folder
+    shutil.make_archive(str(output_dir), "zip", output_dir.parent, output_dir.name)
+    log.info(f"Zipped → {output_dir}.zip")
+
+    log.info(f"\nDone. {collected} pairs collected.")
+    if missing:
+        log.warning(f"{len(missing)} missing files:")
+        for m in missing:
+            log.warning(f"  {m}")
+
+
+if __name__ == "__main__":
+    main()

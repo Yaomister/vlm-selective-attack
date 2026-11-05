@@ -121,25 +121,31 @@ def save_outputs(label, embeddings, paths):
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
-log.info(f"Using device: {DEVICE}")
-log.info(f"Loading CLIP model '{MODEL}'...")
-model = torch.hub.load("facebookresearch/dinov2", MODEL).to(DEVICE).eval()
-preprocess = transforms.Compose(
-    [
-        transforms.Resize(256, interpolation=transforms.InterpolationMode.BICUBIC),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-    ]
-)
-model.eval()
 
-for label, input_dir in [("harmful", HARMFUL_INPUT_DIR), ("safe", SAFE_INPUT_DIR)]:
-    paths = collect_image_paths(input_dir)
-    if not paths:
-        log.warning(f"No images found in {input_dir}, skipping.")
-        continue
-    embeddings, valid_paths = embed_images(paths, model, preprocess)
-    save_outputs(label, embeddings, valid_paths)
+def main():
+    log.info(f"Using device: {DEVICE}")
+    log.info(f"Loading CLIP model '{MODEL}'...")
+    model = torch.hub.load("facebookresearch/dinov2", MODEL).to(DEVICE).eval()
+    preprocess = transforms.Compose(
+        [
+            transforms.Resize(256, interpolation=transforms.InterpolationMode.BICUBIC),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        ]
+    )
+    model.eval()
 
-log.info("All done.")
+    for label, input_dir in [("harmful", HARMFUL_INPUT_DIR), ("safe", SAFE_INPUT_DIR)]:
+        paths = collect_image_paths(input_dir)
+        if not paths:
+            log.warning(f"No images found in {input_dir}, skipping.")
+            continue
+        embeddings, valid_paths = embed_images(paths, model, preprocess)
+        save_outputs(label, embeddings, valid_paths)
+
+    log.info("All done.")
+
+
+if __name__ == "__main__":
+    main()
