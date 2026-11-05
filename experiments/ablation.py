@@ -68,7 +68,22 @@ def parse_args():
         default=100,
         help="The number of generations between checkpoints",
     )
-    return p.parse_args()
+    p.add_argument(
+        "--num-shards",
+        type=int,
+        default=1,
+        help="The number of parallel jobs to split the images across",
+    )
+    p.add_argument(
+        "--shard-id",
+        type=int,
+        default=0,
+        help="Which split of the images this job runs, from 0 to num-shards - 1",
+    )
+    args = p.parse_args()
+    if not 0 <= args.shard_id < args.num_shards:
+        p.error("--shard-id must be between 0 and --num-shards - 1")
+    return args
 
 
 def load_vlm(model_id):
@@ -88,22 +103,26 @@ def load_vlm(model_id):
     return model, processor
 
 
-def gather_images(path):
+def gather_images(path, shard_id=0, num_shards=1):
     """
-    Group the perturbed image paths by model, epsilon, and attack direction.
+    Group one shard of the perturbed image paths by model, epsilon, and attack direction.
     """
     pattern = re.compile(
         r"(?P<model>[^/]+)/epsilon_(?P<eps>[\d.]+)/(?P<id>\d+)_(?P<label>harmful|safe)_pert\.png$"
     )
     groups = defaultdict(list)
 
-    for root, _, fs in os.walk(path):
-        for f in fs:
-            m = pattern.search(os.path.join(root, f))
-            if m:
-                groups[(m["model"], m["eps"], attack_directions[m["label"]])].append(
-                    os.path.join(root, f)
-                )
+    # sorted so that every job and every rerun agrees on which images are in a shard
+    image_paths = sorted(
+        os.path.join(root, f)
+        for root, _, fs in os.walk(path)
+        for f in fs
+        if pattern.search(os.path.join(root, f))
+    )
+
+    for image_path in image_paths[shard_id::num_shards]:
+        m = pattern.search(image_path)
+        groups[(m["model"], m["eps"], attack_directions[m["label"]])].append(image_path)
     return groups
 
 
@@ -295,7 +314,7 @@ def main():
 
     args = parse_args()
 
-    dataset = gather_images(args.dataset_dir)
+    dataset = gather_images(args.dataset_dir, args.shard_id, args.num_shards)
 
     os.makedirs(args.output_dir, exist_ok=True)
 
