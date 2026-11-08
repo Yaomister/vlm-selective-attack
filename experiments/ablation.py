@@ -42,7 +42,7 @@ def parse_args():
     p.add_argument(
         "--output-dir",
         type=str,
-        default="attack_results",
+        default="ablation_results",
         help="The folder to save the results",
     )
     p.add_argument(

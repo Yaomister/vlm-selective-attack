@@ -15,6 +15,6 @@ source /home/yao.eric/vlm-selective-attack/.venv/bin/activate
 python -m experiments.ablation \
   --experiment safety_prompt_with_description \
   --dataset-dir ./attack_results \
-  --output-dir ./attack_results/ablation/shard_$SLURM_ARRAY_TASK_ID \
+  --output-dir ./ablation/shard_$SLURM_ARRAY_TASK_ID \
   --num-shards 8 \
   --shard-id $SLURM_ARRAY_TASK_ID

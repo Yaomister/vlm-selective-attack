@@ -47,7 +47,7 @@ def parse_arguments():
     parser.add_argument("--graph-output-dir", default="./graphs")
     parser.add_argument(
         "--what-to-analyse",
-        choices=["epsilon-sweep", "cosine-similary-success"],
+        choices=["epsilon-sweep", "cosine-similarity"],
         required=True,
     )
     return parser.parse_args()
@@ -167,8 +167,15 @@ def calculate_and_graph_success_rate_over_sweep(data: pd.DataFrame, output_dir: 
         )
 
 
-def calculate_average_cosine_similarty(data: pd.DataFrame, for_success=True):
-    pass
+def calculate_average_cosine_similarity(data: pd.DataFrame):
+    data = data.assign(eligible=_before_flip(data), success=_successful_flips(data))
+    data = data[data["eligible"]]
+
+    averages = data.groupby(["direction", "model", "success"])[
+        ["cos_safety", "cos_desc"]
+    ].mean()
+    print(averages)
+    return averages
 
 
 if __name__ == "__main__":
@@ -180,5 +187,5 @@ if __name__ == "__main__":
     match args.what_to_analyse:
         case "epsilon-sweep":
             calculate_and_graph_success_rate_over_sweep(data, args.graph_output_dir)
-        case "cosine-similarity-success":
-            calculate_average_cosine_similarty(data, for_success=True)
+        case "cosine-similarity":
+            calculate_average_cosine_similarity(data)
