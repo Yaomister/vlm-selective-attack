@@ -165,11 +165,11 @@ def get_hidden(vlm, inputs, pixel_values, args):
     hidden_states = outputs.hidden_states
 
     if args.pooling_method == "last_token":
-        return hidden_states[args.layer_from_last][:, -1, :]
+        return hidden_states[args.layer_from_last][:, -1, :].float()
 
     elif args.pooling_method == "mean":
         # (batch_size, hidden_dim)
-        return hidden_states[args.layer_from_last].mean(dim=1)
+        return hidden_states[args.layer_from_last].float().mean(dim=1)
 
     # image tokens only
     image_token = getattr(vlm.config, "image_token_id", None)
@@ -179,7 +179,7 @@ def get_hidden(vlm, inputs, pixel_values, args):
 
     masked = inputs["input_ids"][0] == image_token
 
-    return hidden_states[args.layer_from_last][:, masked, :].mean(dim=1)
+    return hidden_states[args.layer_from_last][:, masked, :].float().mean(dim=1)
 
 
 def generate(vlm, processor, pixel_values, prompt, image, max_tokens=150):

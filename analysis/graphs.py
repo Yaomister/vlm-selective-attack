@@ -8,6 +8,12 @@ from itertools import cycle
 import matplotlib.pyplot as plt
 from argparse import ArgumentParser
 
+# make it print everything
+pd.set_option("display.max_rows", None)
+pd.set_option("display.max_columns", None)
+pd.set_option("display.width", None)
+
+
 okabe_ito_palette = [
     "#0072B2",
     "#E69F00",
@@ -60,7 +66,7 @@ def parse_arguments():
     parser.add_argument("--graph-output-dir", default="./graphs")
     parser.add_argument(
         "--what-to-analyse",
-        choices=["epsilon-sweep", "mu-sweep", "cosine-similarity"],
+        choices=["epsilon-sweep", "mu-sweep", "geometric"],
         required=True,
     )
     return parser.parse_args()
@@ -211,12 +217,22 @@ def calculate_and_graph_success_rate_over_sweep(
     )
 
 
-def calculate_average_cosine_similarity(data: pd.DataFrame):
+def calculate_average_geometric_values(data: pd.DataFrame):
     data = data.assign(eligible=_before_flip(data), success=_successful_flips(data))
+    data["final_safety_drift"] = (
+        data["final_safety_distance"] - data["initial_safety_distance"]
+    )
+
     data = data[data["eligible"]]
 
-    averages = data.groupby(["direction", "model", "success"])[
-        ["cos_safety", "cos_desc"]
+    averages = data.groupby(["success", "direction", "model", "epsilon"])[
+        [
+            "cos_safety",
+            "cos_desc",
+            "delta_l2",
+            "final_safety_drift",
+            "final_description_drift",
+        ]
     ].mean()
     print(averages)
     return averages
@@ -237,5 +253,5 @@ if __name__ == "__main__":
             calculate_and_graph_success_rate_over_sweep(
                 data, args.graph_output_dir, "mu"
             )
-        case "cosine-similarity":
-            calculate_average_cosine_similarity(data)
+        case "geometric":
+            calculate_average_geometric_values(data)
