@@ -4,8 +4,21 @@ import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from itertools import cycle
 import matplotlib.pyplot as plt
 from argparse import ArgumentParser
+
+okabe_ito_palette = [
+    "#0072B2",
+    "#E69F00",
+    "#009E73",
+    "#D55E00",
+    "#CC79A7",
+    "#56B4E9",
+    "#000000",
+]
+
+graph_markers = ["o", "s", "^", "D", "v", "*", "X"]
 
 UNSURE = [
     "difficult to determine",
@@ -47,7 +60,7 @@ def parse_arguments():
     parser.add_argument("--graph-output-dir", default="./graphs")
     parser.add_argument(
         "--what-to-analyse",
-        choices=["epsilon-sweep", "cosine-similarity"],
+        choices=["epsilon-sweep", "mu-sweep", "cosine-similarity"],
         required=True,
     )
     return parser.parse_args()
@@ -123,48 +136,79 @@ def _successful_flips(data):
     return _before_flip(data) & flipped
 
 
-def calculate_and_graph_success_rate_over_sweep(data: pd.DataFrame, output_dir: str):
-    data.groupby(["epsilon", "model_name"])
+def _get_marker_color_per_model(model_names):
+    pairs = {}
+
+    for model_name, color, marker in zip(model_names, okabe_ito_palette, graph_markers):
+        pairs[model_name] = (color, marker)
+
+    return pairs
+
+
+def calculate_and_graph_success_rate_over_sweep(
+    data: pd.DataFrame, output_dir: str, metric: str
+):
+    data.groupby([metric, "model_name"])
 
     data = data.assign(eligible=_before_flip(data), success=_successful_flips(data))
 
     print(f"There are {len(data)} attacks ran")
 
     success_rates = (
-        data.groupby(["epsilon", "model", "direction"])["success"]
-        .mean()
-        .unstack("model")
+        data.groupby([metric, "model", "direction"])["success"].mean().unstack("model")
     )
 
     print("The success rates (grouped by model):")
     print(success_rates)
 
-    names = {1.0: ("harmful to safe", "-"), -1.0: ("safe to harmful", "--")}
+    # names = {1.0: ("harmful to safe", "-"), -1.0: ("safe to harmful", "--")}
 
-    for direction, row in success_rates.groupby("direction"):
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True, layout="constrained")
+    color_and_marker = _get_marker_color_per_model(success_rates.columns.tolist())
 
-        fig, axes = plt.subplots(1, 4, figsize=(14, 2.5), sharey=True)
+    for ax, (direction, row) in zip(axes, success_rates.groupby("direction")):
 
         row = row.droplevel("direction")
-        for ax, model in zip(axes, row.columns):
-            ax.plot(row.index, row[model], marker="o")
-            ax.set_title(model)
-            ax.grid(True, alpha=0.3)
-            ax.set_xscale("log")
-            ax.minorticks_off()
-            ax.set_xticks(row.index, labels=[f"{e:g}" for e in row.index], rotation=45)
+        for model in row.columns:
+            color, marker = color_and_marker[model]
+            ax.plot(row.index, row[model], marker=marker, label=model, color=color)
+        ax.set_title("Harmful to Safe" if direction == 1 else "Safe to Harmful")
+        ax.grid(True, alpha=0.3)
+        ax.set_xscale("log")
+        ax.minorticks_off()
+        ax.set_xticks(row.index, labels=[f"{e:g}" for e in row.index], rotation=45)
 
-        axes[0].set_ylabel("Attack success rate")
         axes[0].set_ylim(0, 1)
+        axes[-1].legend(loc="lower right")
         fig.supxlabel("ε")
+        fig.supylabel("Attack Success Rate")
 
-        output_path = Path(output_dir)
-        output_path.mkdir(exist_ok=True)
+        # for direction, row in success_rates.groupby("direction"):
 
-        fig.savefig(
-            output_path / f"success_vs_epsilon_{names[direction][0]}.pdf",
-            bbox_inches="tight",
-        )
+        #     fig, axes = plt.subplots(2, 2, figsize=(6, 6), sharey=True)
+        #     axes = axes.flatten()
+        #     fig.subplots_adjust(hspace=0.35)
+
+        #     row = row.droplevel("direction")
+        #     for ax, model in zip(axes, row.columns):
+        #         ax.plot(row.index, row[model], marker="o")
+        #         ax.set_title(model)
+        #         ax.grid(True, alpha=0.3)
+        #         ax.set_xscale("log")
+        #         ax.minorticks_off()
+        #         ax.set_xticks(row.index, labels=[f"{e:g}" for e in row.index], rotation=45)
+
+        #     axes[0].set_ylim(0, 1)
+        #     fig.supxlabel("ε")
+        #     fig.supylabel("Attack Success Rate")
+
+    output_path = Path(output_dir)
+    output_path.mkdir(exist_ok=True)
+
+    fig.savefig(
+        output_path / f"success_vs_{metric}.pdf",
+        bbox_inches="tight",
+    )
 
 
 def calculate_average_cosine_similarity(data: pd.DataFrame):
@@ -186,6 +230,12 @@ if __name__ == "__main__":
 
     match args.what_to_analyse:
         case "epsilon-sweep":
-            calculate_and_graph_success_rate_over_sweep(data, args.graph_output_dir)
+            calculate_and_graph_success_rate_over_sweep(
+                data, args.graph_output_dir, "epsilon"
+            )
+        case "mu-sweep":
+            calculate_and_graph_success_rate_over_sweep(
+                data, args.graph_output_dir, "mu"
+            )
         case "cosine-similarity":
             calculate_average_cosine_similarity(data)
