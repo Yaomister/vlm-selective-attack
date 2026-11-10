@@ -244,6 +244,8 @@ if __name__ == "__main__":
     print(len(data))
     print(data.columns.tolist())
 
+    print(data["description_perturbed"])
+
     match args.what_to_analyse:
         case "epsilon-sweep":
             calculate_and_graph_success_rate_over_sweep(

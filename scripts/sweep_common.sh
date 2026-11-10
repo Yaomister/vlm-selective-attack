@@ -10,7 +10,7 @@ LAYER=-1
 POOL=last_token
 
 run_attack() {
-  python experiments/experiment_v4.py \
+  python -m experiments.experiment_v4 \
     --model_name $1 \
     --dataset_dir ./sorted \
     --output_dir ./attack_results/$1/$2 \
