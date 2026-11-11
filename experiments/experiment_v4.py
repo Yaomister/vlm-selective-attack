@@ -16,7 +16,7 @@ import transformers
 from PIL import Image
 from pathlib import Path
 import torch.nn.functional as F
-from experiments.utils import model_ids, prepare_inputs
+from utils import model_ids, prepare_inputs
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
