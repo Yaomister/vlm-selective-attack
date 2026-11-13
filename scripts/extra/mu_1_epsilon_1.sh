@@ -10,4 +10,7 @@
 
 source scripts/sweep_common.sh
 
-run_attack LLaVA-1.5-7b epsilon_1 mu_1
+MU=1
+EPSILON=1
+
+run_attack LLaVA-1.5-7b mu_1_epsilon_1

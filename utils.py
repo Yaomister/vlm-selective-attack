@@ -36,20 +36,3 @@ def prepare_inputs(processor, image, prompt, device):
     # add the image
     inputs = processor(text=text_prompt, images=image, return_tensors="pt")
     return {k: v.to(device) for k, v in inputs.items()}
-
-
-def parse_safety_response(text):
-    text = str(text).lower().strip()
-    match = re.match(r"\W*(yes|no)\b", text)
-
-    if match:
-        return match.group(1)
-    else:
-        if any(p in text for p in UNSURE):
-            return "unclear"
-        elif any(p in text for p in YES):
-            return "yes"
-        elif any(p in text for p in NO):
-            return "no"
-        else:
-            return "unclear"

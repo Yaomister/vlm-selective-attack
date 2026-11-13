@@ -35,7 +35,13 @@ def parse_arguments():
     parser.add_argument("--graph-output-dir", default="./graphs")
     parser.add_argument(
         "--what-to-analyse",
-        choices=["epsilon-sweep", "mu-sweep", "geometric", "ablation"],
+        choices=[
+            "epsilon-sweep",
+            "mu-sweep",
+            "geometric",
+            "ablation",
+            "geometric-baseline",
+        ],
         required=True,
     )
     return parser.parse_args()
@@ -223,16 +229,97 @@ def calculate_average_geometric_values(data: pd.DataFrame):
     return averages
 
 
+def calculate_baseline(data: pd.DataFrame):
+
+    data = data.assign(eligible=_before_flip(data), success=_successful_flips(data))
+
+    print("Calculating the normalized safety dift")
+
+    for model, model_data in data.groupby("model"):
+        print(f"For model {model}")
+
+        # the normalized safety drift
+        safe_mask = (model_data["direction"] < 0).to_numpy()
+
+        safe_centroid = (
+            np.stack(model_data[safe_mask]["h_clean_safety"]).astype(np.float64).mean(0)
+        )
+        harmful_centroid = (
+            np.stack(model_data[~safe_mask]["h_clean_safety"])
+            .astype(np.float64)
+            .mean(0)
+        )
+        clean_s = np.stack(model_data["h_clean_safety"]).astype(np.float64)
+        pert_s = np.stack(model_data["h_pert_safety"]).astype(np.float64)
+
+        model_data["safety_drift"] = ((pert_s - safe_centroid) ** 2).mean(1) - (
+            (clean_s - safe_centroid) ** 2
+        ).mean(1)
+
+        gap = ((safe_centroid - harmful_centroid) ** 2).mean()
+
+        model_data["normalized_safety_drift"] = model_data["safety_drift"] / gap
+
+        print(
+            model_data.groupby(["direction", "success"])[
+                "normalized_safety_drift"
+            ].mean()
+        )
+
+    print("Calculating the normalized description drift")
+
+    for model, model_data in data.groupby("model"):
+        print(f"For model {model}")
+
+        pairs = model_data.drop_duplicates(["pair_id", "direction"]).pivot(
+            index="pair_id", columns="direction", values="h_clean_desc"
+        )
+
+        other = [
+            pairs.loc[pair_id, -direction]
+            for pair_id, direction in zip(
+                model_data["pair_id"], model_data["direction"]
+            )
+        ]
+
+        other = np.stack(other)
+
+        clean_d = np.stack(model_data["h_clean_desc"]).astype(np.float64)
+        pert_d = np.stack(model_data["h_pert_desc"]).astype(np.float64)
+
+        drift = ((clean_d - pert_d) ** 2).mean(1)
+        total_distance = ((clean_d - other) ** 2).mean(1)
+        model_data["normalized_desc_drift"] = drift / total_distance
+
+        print(
+            model_data.groupby(["direction", "success"])["normalized_desc_drift"].mean()
+        )
+
+    pairs = model_data.drop_duplicates(["model", "pair_id", "direction"]).pivot(
+        index=["model", "pair_id"], columns="direction", values="h_clean_desc"
+    )
+
+    # the cosine similarity baseline
+    for model, pair in pairs.groupby("model"):
+        safe = np.stack(pair[-1.0])
+        harmful = np.stack(pair[1.0])
+        cosine_partner = (safe * harmful).sum(1) / (
+            np.linalg.norm(safe, axis=1) * np.linalg.norm(harmful, axis=1)
+        )
+        print(model, round(cosine_partner.mean(), 4), round(cosine_partner.std(), 4))
+
+
 if __name__ == "__main__":
     args = parse_arguments()
+
     if args.what_to_analyse == "ablation":
         data = load_ablation_dataset(args.data_dir)
     else:
-        data = load_dataset(args.data_dir)
-    print(len(data))
-    print(data.columns.tolist())
+        data = load_sweeps_dataset(args.data_dir)
 
     match args.what_to_analyse:
+        case "geometric-baseline":
+            calculate_baseline(data)
         case "epsilon-sweep":
             calculate_and_graph_success_rate_over_sweep(
                 data, args.graph_output_dir, "epsilon"

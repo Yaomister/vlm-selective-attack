@@ -10,4 +10,6 @@
 
 source scripts/sweep_common.sh
 
+MU=0
+
 run_attack LLaVA-1.5-7b mu_0

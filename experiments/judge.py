@@ -18,8 +18,11 @@ def parse_arguments():
 
 def judge(before, after):
     prompt = (
-        "Do these describe the same main subject and scene? Minor wording differences are fine. "
-        "Answer with exactly one word: yes or no.\n\n"
+        "Do these two descriptions describe the same main subject and scene?\n"
+        "Check the main subject (identity, count, key attributes, action) and the setting.\n"
+        "Answer no if any of these differ, contradict, or appear in only one description.\n"
+        "Ignore wording, sentence order, and minor background details.\n"
+        "Answer with one word: yes or no.\n\n"
         f"Description 1: {before}\n\nDescription 2: {after}"
     )
     r = ollama.chat(
@@ -60,10 +63,9 @@ if __name__ == "__main__":
 
     print("Data loaded successfully, starting to judge the responses.")
 
-    res = []
-
     for model_name in data["model"].unique():
         for attack_direction in data["direction"].unique():
+            res = []
 
             print(f"Starting for {model_name} direction {attack_direction}")
 
@@ -104,7 +106,7 @@ if __name__ == "__main__":
             res.append({"ASR": asr})
 
             output_path = Path(
-                f"{args.output_dir}/judged_responses_{model_name}_{dir}.json"
+                f"{args.output_dir}/judged_responses_{model_name}_{attack_direction}.json"
             )
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
