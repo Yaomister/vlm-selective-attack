@@ -10,6 +10,7 @@
 
 source scripts/sweep_common.sh
 
+STEP=2000
 MU=1
 EPSILON=1
 

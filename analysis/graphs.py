@@ -295,7 +295,7 @@ def calculate_baseline(data: pd.DataFrame):
             model_data.groupby(["direction", "success"])["normalized_desc_drift"].mean()
         )
 
-    pairs = model_data.drop_duplicates(["model", "pair_id", "direction"]).pivot(
+    pairs = data.drop_duplicates(["model", "pair_id", "direction"]).pivot(
         index=["model", "pair_id"], columns="direction", values="h_clean_desc"
     )
 
