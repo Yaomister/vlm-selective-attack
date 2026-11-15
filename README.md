@@ -1,0 +1,1 @@
+This repository contains the source code and dataset to the paper "Selective Adversarial Attacks on Vision-Language Model Safety via Embedding-Space Optimization"

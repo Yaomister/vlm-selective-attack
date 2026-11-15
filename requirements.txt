@@ -1,0 +1,19 @@
+# Core
+torch>=2.0.0
+torchvision>=0.15.0
+
+# CLIP
+git+https://github.com/openai/CLIP.git
+
+# Embeddings / search
+faiss-cpu>=1.7.4          # swap for faiss-gpu if using CUDA
+
+# Review server
+Flask>=3.0.0
+
+# Utilities
+numpy>=1.24.0
+Pillow>=9.5.0
+tqdm>=4.65.0
+transformers
+accelerate
