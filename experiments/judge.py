@@ -1,3 +1,7 @@
+"""
+LLM judge to compare the pre- and post-attack descriptions.
+"""
+
 import os
 import json
 import ollama
@@ -9,6 +13,7 @@ from utils import sweep_result_file_pattern
 
 
 def parse_arguments():
+    """Get the arguments for the experiment."""
     parser = ArgumentParser()
     parser.add_argument("--results-dir", default="./attack_results")
     parser.add_argument("--output-dir", default="./judged_results")
@@ -17,6 +22,8 @@ def parse_arguments():
 
 
 def judge(before, after):
+    """Judge the two descriptions."""
+
     prompt = (
         "Do these two descriptions describe the same main subject and scene?\n"
         "Check the main subject (identity, count, key attributes, action) and the setting.\n"
@@ -34,6 +41,8 @@ def judge(before, after):
 
 
 def load_results(results_dir):
+    """Load the results from the attacks."""
+
     path = Path(results_dir)
 
     data = []

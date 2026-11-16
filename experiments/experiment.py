@@ -1,7 +1,5 @@
 """
 Hidden-State Dual-Objective PGD Attack on VLM Safety
-
-Version with DDP
 """
 
 import os
@@ -313,7 +311,7 @@ def _get_normalization(processor, pixel_values):
 
 
 def _unpatchify(pixels, inputs, processor):
-    """Convert patches back to image for Qwen."""
+    """Convert patches back to image for QwenVL."""
     ip = processor.image_processor
     t, h, w = inputs["image_grid_thw"][0].tolist()
     m, P, T = ip.merge_size, ip.patch_size, ip.temporal_patch_size
@@ -398,7 +396,7 @@ def attack(
     vlm.train()
     for step in range(args.steps):
 
-        # Safety pathway: push AWAY from the reference
+        # safety pathway is to push AWAY from the reference
         perturbed_safety = (clean_pixels_safety + delta).clamp(0, 1)
 
         hidden_states_safety_perturbed = get_hidden(
@@ -417,8 +415,7 @@ def attack(
             hidden_states_description_clean.detach(),
         )
 
-        # We want to MAXIMIZE loss_safety and MINIMIZE loss_desc
-        # So we minimize: -loss_safety + mu * loss_desc
+        # We want to maximize loss_safety and minimize loss_desc
         loss = (direction * loss_safety) + args.mu * loss_description
         loss.backward()
 
@@ -430,7 +427,8 @@ def attack(
             delta.data = (clean_pixels_safety + delta.data).clamp(
                 0, 1
             ) - clean_pixels_safety
-            # Keep temporal copies identical for Qwen
+
+            # Keep temporal copies identical for QwenVL
             if delta.dim() == 2:
                 Tp = processor.image_processor.temporal_patch_size
                 d = delta.data.view(delta.shape[0], 3, Tp, -1)

@@ -2,11 +2,9 @@
 torch>=2.0.0
 torchvision>=0.15.0
 
-# CLIP
-git+https://github.com/openai/CLIP.git
 
-# Embeddings / search
-faiss-cpu>=1.7.4          # swap for faiss-gpu if using CUDA
+# Embeddings
+faiss-cpu>=1.7.4 
 
 # Review server
 Flask>=3.0.0

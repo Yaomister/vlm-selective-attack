@@ -1,11 +1,5 @@
 """
-retrieve_matches.py
-
-Loads precomputed CLIP embeddings, finds the top-k closest safe images
-for each harmful image using FAISS, and outputs:
-  - matches.json       grouped results with image names and scores
-  - matches.csv        flat table for spreadsheet review
-  - report.html        visual report with images displayed side by side
+Loads precomputed image embeddings, finds the top-k closest safe images for each harmful image using FAISS.
 """
 
 import json
@@ -17,19 +11,24 @@ import faiss
 from pathlib import Path
 from PIL import Image
 
-# ── CONFIG ────────────────────────────────────────────────────────────────────
+# folder from generate_embeddings.py
+EMBEDDINGS_DIR = "../embeddings/ViT-L/14"
+# original harmful images folder
+HARMFUL_IMG_DIR = "harmful_images"
+# original safe images folder
+SAFE_IMG_DIR = "safe_images"
+# where results will be saved
+OUTPUT_DIR = "matches"
 
-EMBEDDINGS_DIR = "../embeddings/ViT-L/14"  # folder from generate_embeddings.py
-HARMFUL_IMG_DIR = "harmful_images"  # original harmful images folder
-SAFE_IMG_DIR = "safe_images"  # original safe images folder
-OUTPUT_DIR = "matches"  # where results will be saved
+# number of safe matches per harmful image
+TOP_K = 10
+# drop matches below this cosine similarity
+MIN_SIMILARITY = 0.20
+# max times one safe image can be used
+CAP = 3
+# pool to pick from before capping
+CANDIDATES = 50
 
-TOP_K = 10  # number of safe matches per harmful image
-MIN_SIMILARITY = 0.20  # drop matches below this cosine similarity
-CAP = 3  # max times one safe image can be used
-CANDIDATES = 50  # pool to pick from before capping
-
-# ── SETUP ─────────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,10 +37,9 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ── FUNCTIONS ─────────────────────────────────────────────────────────────────
-
 
 def load_embeddings(label):
+    """Load the saved image embeddings."""
     base = Path(EMBEDDINGS_DIR)
     embeddings = np.load(base / f"{label}_embeddings.npy").astype("float32")
     with open(base / f"{label}_paths.json") as f:
@@ -51,6 +49,7 @@ def load_embeddings(label):
 
 
 def build_index(embeddings):
+    """Build the FAISS index."""
     index = faiss.IndexFlatIP(embeddings.shape[1])
     index.add(embeddings)
     log.info(f"FAISS index built  ({index.ntotal} vectors)")
@@ -58,6 +57,8 @@ def build_index(embeddings):
 
 
 def retrieve(harmful_emb, harmful_paths, safe_emb, safe_paths, k_csls=10):
+    """Get the top-k matches."""
+
     mu = np.concatenate([harmful_emb, safe_emb]).mean(0)
     h = harmful_emb - mu
     h /= np.linalg.norm(h, axis=1, keepdims=True)
@@ -126,6 +127,8 @@ def save_json(results, path):
 
 
 def save_csv(results, path):
+    """Save the matched pairs."""
+
     fieldnames = [
         "harmful_idx",
         "harmful_image",
@@ -164,6 +167,8 @@ def img_to_b64(img_path, max_size=160):
 
 
 def save_html(results, path):
+    """Turn the matched images into a interactive HTML file for manual selection."""
+
     # Group by harmful image
     grouped = {}
     for r in results:
@@ -173,7 +178,6 @@ def save_html(results, path):
             grouped[idx]["matches"] = []
         grouped[idx]["matches"].append(r)
 
-    # Build a flat JS lookup: card_id -> {harmful_idx, harmful_path, safe_path}
     pairs_lookup = {}
     rows_html = ""
     for idx, entry in sorted(grouped.items()):
@@ -410,6 +414,8 @@ def save_html(results, path):
 
 
 def print_summary(results, harmful_paths):
+    """Print a summary of the matching."""
+
     total = len(harmful_paths)
     matched = len({r["harmful_idx"] for r in results})
     avg_top1 = np.mean([r["similarity"] for r in results if r["rank"] == 1])
@@ -422,10 +428,9 @@ def print_summary(results, harmful_paths):
     print("──────────────────────────────────────────────────────────\n")
 
 
-# ── MAIN ──────────────────────────────────────────────────────────────────────
-
-
 def main():
+    """Run the matching."""
+
     harmful_embeddings, harmful_paths = load_embeddings("harmful")
     safe_embeddings, safe_paths = load_embeddings("safe")
 

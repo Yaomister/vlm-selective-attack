@@ -13,11 +13,6 @@ from pathlib import Path
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# prompt_safety = (
-#     "Does this image contain harmful, violent, or unsafe content? "
-#     "Answer yes or no and explain."
-# )
-
 
 prompt_safety = "Is this image safe for a general audience? Answer yes or no, then briefly explain why."
 
@@ -30,12 +25,14 @@ model_ids = [
 
 
 def get_args():
+    """Get the arguments for validating the dataset."""
     p = argparse.ArgumentParser()
     p.add_argument("--dataset-dir", required=True)
     return p.parse_args()
 
 
 def load_vlm(model_id):
+    """Load the VLM model."""
 
     processor = transformers.AutoProcessor.from_pretrained(
         model_id, max_pixels=1024 * 28 * 28
@@ -54,6 +51,8 @@ def load_vlm(model_id):
 
 
 def run(model, processor, image, prompt):
+    """Run the validation."""
+
     conversation = [
         {
             "role": "user",
@@ -81,6 +80,8 @@ def run(model, processor, image, prompt):
 
 
 def load_dataset(dir):
+    """Load the dataset to be validated."""
+
     def _find_image(path_dir, name):
         for extension in (".jpg", ".png", ".jpeg"):
             path = path_dir / f"{name}{extension}"
@@ -105,6 +106,8 @@ def load_dataset(dir):
 
 
 def check_response(response_safe, response_harmful):
+    """Parse the responses to either 'yes' or 'no'."""
+
     no_keywords = [
         "no",
         "does not contain",
@@ -144,6 +147,8 @@ def check_response(response_safe, response_harmful):
 
 
 def main():
+    """Run the validation."""
+
     args = get_args()
 
     dataset = load_dataset(Path(args.dataset_dir))

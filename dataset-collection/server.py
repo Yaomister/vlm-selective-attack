@@ -1,9 +1,5 @@
 """
-server.py
-
-Locally hosted Flask server for reviewing and selecting image pairs.
-Serves the report and handles copying selected pairs to the output folder.
-
+Locally hosted Flask server for reviewing and selecting image pairs. Serves the report and handles copying selected pairs to the output folder.
 """
 
 import shutil
@@ -11,15 +7,18 @@ import logging
 from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory, abort
 
-# ── CONFIG ────────────────────────────────────────────────────────────────────
-
-MATCHES_DIR = "/Users/ericyao/Documents/projects/vlm-selective-attack/matches"  # folder containing report.html + matches.json
-HARMFUL_IMG_DIR = "/Users/ericyao/Documents/projects/vlm-selective-attack/harmful_images"  # original harmful images folder
-SAFE_IMG_DIR = "/Users/ericyao/Documents/projects/vlm-selective-attack/safe_images"  # original safe images folder
-SORTED_DIR = "/Users/ericyao/Documents/projects/vlm-selective-attack/sorted"  # where selected pairs will be copied to
+# folder containing report and match files
+MATCHES_DIR = "/Users/ericyao/Documents/projects/vlm-selective-attack/matches"
+# original harmful images folder
+HARMFUL_IMG_DIR = (
+    "/Users/ericyao/Documents/projects/vlm-selective-attack/harmful_images"
+)
+# original safe images folder
+SAFE_IMG_DIR = "/Users/ericyao/Documents/projects/vlm-selective-attack/safe_images"
+# where selected pairs will be copied to
+SORTED_DIR = "/Users/ericyao/Documents/projects/vlm-selective-attack/sorted"
 PORT = 5000
 
-# ── SETUP ─────────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,8 +28,6 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
-# ── ROUTES ────────────────────────────────────────────────────────────────────
 
 
 @app.route("/")
@@ -90,8 +87,6 @@ def status():
     selected = [int(p.name) for p in sorted_path.iterdir() if p.is_dir()]
     return jsonify({"selected": selected})
 
-
-# ── MAIN ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     Path(SORTED_DIR).mkdir(parents=True, exist_ok=True)

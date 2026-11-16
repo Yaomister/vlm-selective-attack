@@ -1,8 +1,5 @@
 """
-generate_embeddings.py
-
-Edit the CONFIG block below, then run:
-    python generate_embeddings.py
+Embed the images into vectors and save them.
 """
 
 import json
@@ -16,17 +13,13 @@ from torchvision import transforms
 from PIL import Image
 from tqdm import tqdm
 
-# ── CONFIG ────────────────────────────────────────────────────────────────────
-
 HARMFUL_INPUT_DIR = "harmful_images"
 SAFE_INPUT_DIR = "safe_images"
-
 
 MODEL = "dinov2_vitl14"
 BATCH_SIZE = 64
 OUTPUT_DIR = f"../embeddings/{MODEL}"
 
-# ── SETUP ─────────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,10 +37,9 @@ elif torch.backends.mps.is_available():
 else:
     DEVICE = "cpu"
 
-# ── FUNCTIONS ─────────────────────────────────────────────────────────────────
-
 
 def collect_image_paths(input_dir):
+    """Gather all the images."""
     paths = [
         p
         for p in sorted(Path(input_dir).rglob("*"))
@@ -58,6 +50,7 @@ def collect_image_paths(input_dir):
 
 
 def embed_images(paths, model, preprocess):
+    """Embed the images into vectors."""
     embeddings, valid_paths, failed = [], [], []
 
     for i in tqdm(range(0, len(paths), BATCH_SIZE), desc="Embedding"):
@@ -91,6 +84,8 @@ def embed_images(paths, model, preprocess):
 
 
 def save_outputs(label, embeddings, paths):
+    """Save the embedded vectors."""
+
     out = Path(OUTPUT_DIR)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -119,10 +114,9 @@ def save_outputs(label, embeddings, paths):
     log.info(f"Saved metadata   → {out / f'{label}_metadata.json'}")
 
 
-# ── MAIN ──────────────────────────────────────────────────────────────────────
-
-
 def main():
+    """Run the embedding."""
+
     log.info(f"Using device: {DEVICE}")
     log.info(f"Loading CLIP model '{MODEL}'...")
     model = torch.hub.load("facebookresearch/dinov2", MODEL).to(DEVICE).eval()

@@ -152,7 +152,7 @@ def save(results, save_dir, experiment_name):
 
 def load_results(save_dir, experiment_name):
     """
-    Load any saved results
+    Load any saved results.
     """
     results = defaultdict(
         lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
